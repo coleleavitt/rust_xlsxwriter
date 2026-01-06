@@ -2108,9 +2108,9 @@ impl Worksheet {
     /// If the `jiff` feature is enabled you can use the following types for
     /// which [`IntoExcelData`] is implemented:
     ///
-    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDateTime.html).
-    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDate.html).
-    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilTime.html).
+    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.DateTime.html).
+    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.Date.html).
+    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.Time.html).
     ///
     /// If the `rust_decimal` feature is enabled you can write the [`Decimal`] type via [`rust_decimal`].
     /// This requires that the `Decimal` can be represented as a `f64` in Excel.
@@ -2174,9 +2174,9 @@ impl Worksheet {
     /// If the `jiff` feature is enabled you can use the following types for
     /// which [`IntoExcelData`] is implemented:
     ///
-    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDateTime.html).
-    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDate.html).
-    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilTime.html).
+    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.DateTime.html).
+    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.Date.html).
+    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.Time.html).
     ///
     /// Users can also use this method to write their own data types to Excel by
     /// implementing the [`IntoExcelData`] trait.
@@ -4320,9 +4320,9 @@ impl Worksheet {
     ///
     /// If the `jiff` feature is enabled you can use the following types:
     ///
-    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDateTime.html).
-    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDate.html).
-    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilTime.html).
+    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.DateTime.html).
+    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.Date.html).
+    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.Time.html).
     ///
     /// Excel stores dates and times as a floating point number with a number
     /// format to defined how it is displayed. The number format is set via a
@@ -4509,9 +4509,9 @@ impl Worksheet {
     ///
     /// If the `jiff` feature is enabled you can use the following types:
     ///
-    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDateTime.html).
-    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDate.html).
-    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilTime.html).
+    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.DateTime.html).
+    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.Date.html).
+    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.Time.html).
     ///
     ///
     /// # Parameters
@@ -4606,9 +4606,9 @@ impl Worksheet {
     ///
     /// If the `jiff` feature is enabled you can use the following types:
     ///
-    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDateTime.html).
-    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDate.html).
-    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilTime.html).
+    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.DateTime.html).
+    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.Date.html).
+    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.Time.html).
     ///
     /// Excel stores dates and times as a floating point number with a number
     /// format to defined how it is displayed. The number format is set via a
@@ -4703,9 +4703,9 @@ impl Worksheet {
     ///
     /// If the `jiff` feature is enabled you can use the following types:
     ///
-    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDateTime.html).
-    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilDate.html).
-    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.CivilTime.html).
+    /// - [`jiff::civil::CivilDateTime`](https://docs.rs/jiff/latest/jiff/civil/struct.DateTime.html).
+    /// - [`jiff::civil::CivilDate`](https://docs.rs/jiff/latest/jiff/civil/struct.Date.html).
+    /// - [`jiff::civil::CivilTime`](https://docs.rs/jiff/latest/jiff/civil/struct.Time.html).
     ///
     /// Excel stores dates and times as a floating point number with a number
     /// format to defined how it is displayed. The number format is set via a
@@ -5073,14 +5073,12 @@ impl Worksheet {
     /// EMF and WMF file formats will be supported in an upcoming version of the
     /// library.
     ///
-    /// **NOTE on SVG files**: Excel doesn't directly support SVG files in the
-    /// same way as other image file formats. It allows SVG to be inserted into
-    /// a worksheet but converts them to, and displays them as, PNG files. It
-    /// stores the original SVG image in the file so the original format can be
-    /// retrieved. This removes the file size and resolution advantage of using
-    /// SVG files. As such SVG files are not supported by `rust_xlsxwriter`
-    /// since a conversion to the PNG format would be required and that format
-    /// is already supported.
+    /// **NOTE on SVG and WebP files**: Excel doesn't directly support SVG and
+    /// WebP files in the same way as other image file formats. Excel allows the
+    /// user to add SVG and WebP images but it converts them to PNG files and
+    /// displays them in that format. As such, SVG and WebP images are not
+    /// supported by `rust_xlsxwriter` since a conversion to the PNG format
+    /// would be required, and that format is already supported.
     ///
     /// # Parameters
     ///

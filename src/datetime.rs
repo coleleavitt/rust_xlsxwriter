@@ -166,8 +166,7 @@ const UNIX_EPOCH_PLUS_400: i64 = 12_622_780_800;
 /// documentation for more information on serializing dates and times with
 /// `rust_xlsxwriter`.
 ///
-/// [Serializing dates and times]:
-///     ./serializer/index.html#serializing-dates-and-times
+/// [Serializing dates and times]: serializer/index.html#serializing-dates-and-times
 ///
 #[derive(Clone)]
 pub struct ExcelDateTime {

@@ -27,7 +27,7 @@ cargo run --example app_demo  # or any other example
 12. [Right to left display: Set a worksheet into right to left display mode](#right-to-left-display-set-a-worksheet-into-right-to-left-display-mode)
 13. [Autofitting Columns: Example of autofitting column widths](#autofitting-columns-example-of-autofitting-column-widths)
 14. [Theme: Use a custom workbook theme](#theme-use-a-custom-workbook-theme)
-15. [Theme: Use the Excel 2023/Aptos theme](#theme-use-the-excel-2023/aptos-theme)
+15. [Theme: Use the Excel 2023/Aptos theme](#theme-use-the-excel-2023aptos-theme)
 16. [Insert images: Add images to a worksheet](#insert-images-add-images-to-a-worksheet)
 17. [Insert images: Embedding an image in a cell](#insert-images-embedding-an-image-in-a-cell)
 18. [Insert images: Inserting images to fit a cell](#insert-images-inserting-images-to-fit-a-cell)

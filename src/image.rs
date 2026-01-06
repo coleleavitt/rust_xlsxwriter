@@ -99,14 +99,12 @@ impl Image {
     /// EMF and WMF file formats will be supported in an upcoming version of the
     /// library.
     ///
-    /// **NOTE on SVG files**: Excel doesn't directly support SVG files in the
-    /// same way as other image file formats. It allows SVG to be inserted into
-    /// a worksheet but converts them to, and displays them as, PNG files. It
-    /// stores the original SVG image in the file so the original format can be
-    /// retrieved. This removes the file size and resolution advantage of using
-    /// SVG files. As such, SVG files are not supported by `rust_xlsxwriter`
-    /// since a conversion to the PNG format would be required, and that format
-    /// is already supported.
+    /// **NOTE on SVG and WebP files**: Excel doesn't directly support SVG and
+    /// WebP files in the same way as other image file formats. Excel allows the
+    /// user to add SVG and WebP images but it converts them to PNG files and
+    /// displays them in that format. As such, SVG and WebP images are not
+    /// supported by `rust_xlsxwriter` since a conversion to the PNG format
+    /// would be required, and that format is already supported.
     ///
     /// # Parameters
     ///

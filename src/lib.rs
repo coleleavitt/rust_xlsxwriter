@@ -97,9 +97,18 @@
 //!   document metadata properties.
 //! </p>
 //!
+//! <p>
+//!
+//! - [`Working with Serde`](serializer/index.html): Serializing data structures
+//!   to Excel worksheets using Serde.
+//! </p>
+//!
+//! <p>
+//!
 //! - [`Changelog`](crate::changelog): Release notes and changelog.
 //! - [`Performance`](crate::performance): Performance characteristics of
 //!   `rust_xlsxwriter`.
+//! </p>
 //!
 //! Other external documentation:
 //!
