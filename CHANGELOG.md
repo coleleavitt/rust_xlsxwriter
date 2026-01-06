@@ -5,6 +5,17 @@ This is the changelog/release notes for the `rust_xlsxwriter` crate.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.92.3] - 2026-01-06
+
+### Fixed
+
+- Fixed floating-point precision issue in [`Worksheet::insert_image_fit_to_cell_centered()`].
+
+  [Issue #165].
+
+  [Issue #165]: https://github.com/jmcnamara/rust_xlsxwriter/issues/165
+
+
 ## [0.92.2] - 2025-11-19
 
 ### Added
