@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //
-// Copyright 2022-2025, John McNamara, jmcnamara@cpan.org
+// Copyright 2022-2026, John McNamara, jmcnamara@cpan.org
 
 //! This example demonstrates how cells without explicit formats inherit the
 //! formats from the row and column that they are in. Note the output:

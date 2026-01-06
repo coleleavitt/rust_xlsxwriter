@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //
-// Copyright 2022-2025, John McNamara, jmcnamara@cpan.org
+// Copyright 2022-2026, John McNamara, jmcnamara@cpan.org
 
 //! This example demonstrates adding adding a checkbox boolean value to a
 //! worksheet along with a cell format.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //
-// Copyright 2022-2025, John McNamara, jmcnamara@cpan.org
+// Copyright 2022-2026, John McNamara, jmcnamara@cpan.org
 
 //! Example of setting the default theme for a workbook to a user supplied
 //! custom theme using the `rust_xlsxwriter` library. This example uses an Excel

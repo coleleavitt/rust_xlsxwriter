@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //
-// Copyright 2022-2025, John McNamara, jmcnamara@cpan.org
+// Copyright 2022-2026, John McNamara, jmcnamara@cpan.org
 
 //! An example of how to group worksheet columns into outlines. This example
 //! puts the expand/collapse symbol to the left of the range for all row groups

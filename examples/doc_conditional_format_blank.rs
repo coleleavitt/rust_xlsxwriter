@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //
-// Copyright 2022-2025, John McNamara, jmcnamara@cpan.org
+// Copyright 2022-2026, John McNamara, jmcnamara@cpan.org
 
 //! Example of how to add a blank/non-blank conditional formatting to a
 //! worksheet. Blank values are in light red. Non-blank values are in light
