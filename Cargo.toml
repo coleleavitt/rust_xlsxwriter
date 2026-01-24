@@ -8,13 +8,13 @@ keywords = ["excel", "xlsx"]
 exclude = ["tests/**/*"]
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-version = "0.92.3"
+version = "0.92.4"
 edition = "2021"
 rust-version = "1.83.0" # For zip.rs compatibility.
 
 [dependencies]
 # Default/non-optional dependencies.
-zip = {version = "7.0", default-features = false, features = ["deflate"]}
+zip = {version = "7.2", default-features = false, features = ["deflate"]}
 
 # Optional dependencies.
 ryu = {optional = true, version = "1.0"}
@@ -23,13 +23,13 @@ serde = {optional = true, version = "1.0", features = ["derive"]}
 chrono = {optional = true, version = "0.4", default-features = false, features = ["clock", "wasmbind", "serde"]}
 js-sys = {optional = true, version = "0.3"}
 polars = {optional = true, version = "0.52", default-features = false, features = []}
-tempfile =  {optional = true, version = "3.19"}
+tempfile =  {optional = true, version = "3.24"}
 wasm-bindgen = {optional = true, version = "0.2"}
-rust_decimal = {optional = true, version = "1.37"}
+rust_decimal = {optional = true, version = "1.40"}
 rust_xlsxwriter_derive = {optional = true, version = "0.2"}
 
 [dev-dependencies]
-regex = "1.11"
+regex = "1.12"
 pretty_assertions = "1.4"
 
 [features]

@@ -5,6 +5,28 @@ This is the changelog/release notes for the `rust_xlsxwriter` crate.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.92.4] - 2026-01-24
+
+### Fixed
+
+- Fixed issue where XML escape-like strings, such as `_x1234` were being doubly
+  escaped, inadvertently.
+
+  [Issue #166].
+
+  [Issue #166]: https://github.com/jmcnamara/rust_xlsxwriter/issues/166
+
+- Fixed/added escaping of invalid `\uFFFF` and `\uFFFE` characters.
+
+  [Issue #168].
+
+  [Issue #168]: https://github.com/jmcnamara/rust_xlsxwriter/issues/168
+
+### Added
+
+- Updated `zip` dependency to v7.0.
+
+
 ## [0.92.3] - 2026-01-06
 
 ### Fixed
