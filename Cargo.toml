@@ -20,6 +20,7 @@ zip = {version = "7.2", default-features = false, features = ["deflate"]}
 ryu = {optional = true, version = "1.0"}
 jiff = {optional = true, version = "0.2", default-features = false, features = []}
 serde = {optional = true, version = "1.0", features = ["derive"]}
+ssfmt = {optional = true, version = "0.1"}
 chrono = {optional = true, version = "0.4", default-features = false, features = ["clock", "wasmbind", "serde"]}
 js-sys = {optional = true, version = "0.3"}
 polars = {optional = true, version = "0.52", default-features = false, features = []}
@@ -56,6 +57,10 @@ constant_memory = ["dep:tempfile"]
 # `rust_xlsxwriter::XlsxError` to make code that handles both types of errors
 # easier to write. See also `polars_write_excel`.
 polars = ["dep:polars"]
+
+# `ssfmt`: Adds support for the `ssfmt` crate for Excel number formatting. This
+# allows more accurate autofitting of formatted numbers.
+ssfmt = ["dep:ssfmt"]
 
 # `serde`: Adds support for Serde serialization.
 serde = ["dep:serde", "dep:rust_xlsxwriter_derive"]

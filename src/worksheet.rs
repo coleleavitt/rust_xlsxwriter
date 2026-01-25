@@ -17244,12 +17244,29 @@ impl Worksheet {
                                 max
                             }
 
-                            // For numbers we use a workaround/optimization
-                            // since digits all have a pixel width of 7. This
-                            // gives a slightly greater width for the decimal
-                            // place and minus sign but only by a few pixels and
-                            // over-estimation is okay.
+                            // For numbers we use a workaround based on the
+                            // length or, if `ssfmt` is enabled, we use the
+                            // formatted string width.
+                            #[cfg(not(feature = "ssfmt"))]
                             CellType::Number { number, .. } => 7 * number.to_string().len() as u32,
+                            #[cfg(feature = "ssfmt")]
+                            CellType::Number { number, xf_index } => self.formatted_number_width(
+                                row_num,
+                                col_num,
+                                *number,
+                                *xf_index,
+                                7 * number.to_string().len() as u32,
+                            ),
+
+                            // Datetimes are just numbers with a date format. If
+                            // `ssfmt` is enabled we use the formatted string
+                            // width otherwise we use an approximation based on
+                            // Excel's default format: mm/dd/yyyy.
+                            #[cfg(not(feature = "ssfmt"))]
+                            CellType::DateTime { .. } => 68,
+                            #[cfg(feature = "ssfmt")]
+                            CellType::DateTime { number, xf_index } => self
+                                .formatted_number_width(row_num, col_num, *number, *xf_index, 68),
 
                             // For Boolean types we use the Excel standard
                             // widths for TRUE and FALSE.
@@ -17271,13 +17288,6 @@ impl Worksheet {
                                     utility::pixel_width(result)
                                 }
                             }
-
-                            // Datetimes are just numbers but they also have an
-                            // Excel format. It isn't feasible to parse the
-                            // number format to get the actual string width for
-                            // all format types so we use a width based on the
-                            // Excel's default format: mm/dd/yyyy.
-                            CellType::DateTime { .. } => 68,
 
                             // Ignore the following types which don't add to the width.
                             CellType::Blank { .. } | CellType::Error { .. } => 0,
@@ -17334,8 +17344,54 @@ impl Worksheet {
         self
     }
 
-    /// Set the row properties (outline level and hidden) for a range of grouped
-    /// rows in an outline.
+    // Get the width of a number with the Excel number format applied using the
+    // optional `ssfmt` crate.
+    #[cfg(feature = "ssfmt")]
+    fn formatted_number_width(
+        &self,
+        row: RowNum,
+        col: ColNum,
+        number: f64,
+        xf_index: u32,
+        default: u32,
+    ) -> u32 {
+        use ssfmt::format_default;
+
+        // Check for a non-zero (i.e., formatted) xf_index, in the cell, row,
+        // and column. This is the Excel precedence order.
+        let mut xf_index = xf_index;
+        if xf_index == 0 {
+            if let Some(row_options) = self.changed_rows.get(&row) {
+                xf_index = row_options.xf_index;
+            }
+        }
+        if xf_index == 0 {
+            if let Some(col_options) = self.changed_cols.get(&col) {
+                xf_index = col_options.xf_index;
+            }
+        }
+
+        // If the xf_index is zero the cell isn't formatted.
+        if xf_index == 0 {
+            return default;
+        }
+
+        // Get the cell format and number format string (if any).
+        let cell_format = &self.xf_formats[xf_index as usize];
+        let number_format = &cell_format.num_format;
+        if number_format.is_empty() {
+            return default;
+        }
+
+        // Format the number according to the cell format.
+        match format_default(number, number_format) {
+            Ok(formatted_string) => utility::pixel_width(&formatted_string),
+            Err(_) => default,
+        }
+    }
+
+    // Set the row properties (outline level and hidden) for a range of grouped
+    // rows in an outline.
     fn set_grouped_rows(
         &mut self,
         first_row: RowNum,
