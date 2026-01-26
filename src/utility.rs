@@ -563,8 +563,8 @@ where
 /// - [`XlsxError::SerdeError`] - A wrapped serialization error.
 ///
 #[cfg(feature = "serde")]
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
-#[deprecated(since = "0.88.0", note = "use `serialize_datetime_to_excel` instead")]
+#[doc(hidden)]
+#[deprecated(since = "0.88.0", note = "use `serialize_datetime_to_excel()` instead")]
 pub fn serialize_chrono_naive_to_excel<S>(
     datetime: impl IntoExcelDateTime,
     serializer: S,
@@ -591,10 +591,10 @@ where
 /// - [`XlsxError::SerdeError`] - A wrapped serialization error.
 ///
 #[cfg(feature = "serde")]
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+#[doc(hidden)]
 #[deprecated(
     since = "0.88.0",
-    note = "use `serialize_option_datetime_to_excel` instead"
+    note = "use `serialize_option_datetime_to_excel()` instead"
 )]
 pub fn serialize_chrono_option_naive_to_excel<S>(
     datetime: &Option<impl IntoExcelDateTime>,

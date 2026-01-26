@@ -16,7 +16,8 @@ fn create_new_xlsx_file(filename: &str) -> Result<(), XlsxError> {
 
     worksheet.write_string(0, 0, "This is some long text to test autofit")?;
 
-    worksheet.autofit_to_max_width(200);
+    worksheet.set_autofit_max_width(200);
+    worksheet.autofit();
 
     workbook.save(filename)?;
 

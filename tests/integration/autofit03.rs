@@ -75,7 +75,8 @@ fn create_new_xlsx_file_4(filename: &str) -> Result<(), XlsxError> {
 
     worksheet.set_column_width(1, 1.572)?;
 
-    worksheet.autofit_to_max_width(2000);
+    worksheet.set_autofit_max_width(2000);
+    worksheet.autofit();
 
     workbook.save(filename)?;
 

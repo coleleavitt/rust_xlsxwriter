@@ -1637,6 +1637,7 @@ pub struct Worksheet {
     max_outline_col_level: u8,
     outline_symbols_above: bool,
     outline_symbols_left: bool,
+    max_autofit_width: u32,
 
     #[cfg(feature = "constant_memory")]
     pub(crate) file_writer: BufWriter<File>,
@@ -1865,6 +1866,7 @@ impl Worksheet {
             outline_symbols_above: false,
             outline_symbols_left: false,
             background_image: None,
+            max_autofit_width: MAX_AUTOFIT_WIDTH_PIXELS,
 
             // These collections need to be reset on resave.
             comment_relationships: vec![],
@@ -14604,13 +14606,33 @@ impl Worksheet {
     /// src="https://rustxlsxwriter.github.io/images/worksheet_autofit_with_format2.png">
     ///
     pub fn autofit(&mut self) -> &mut Worksheet {
-        self.autofit_worksheet(MAX_AUTOFIT_WIDTH_PIXELS)
+        self.autofit_worksheet()
+    }
+
+    /// set the maximum autofit width for worksheet columns.
+    ///
+    /// The [`Worksheet::autofit()`] method above simulates Excel's column
+    /// autofit. One undesirable side-effect of this is that Excel autofits very
+    /// long strings up to limit of 255 characters/1790 pixels. This is often
+    /// too wide to display on a single screen at normal zoom. As such the
+    /// `set_autofit_max_width()` method can be used to set a smaller upper
+    /// limit for autofitting long strings. A value of 300 pixels is recommended
+    /// as a good compromise between column width and readability.
+    ///
+    /// # Parameters
+    ///
+    /// - `width`: The maximum column width, in pixels, to use for autofitting.
+    ///
+    ///
+    pub fn set_autofit_max_width(&mut self, width: u32) -> &mut Worksheet {
+        self.max_autofit_width = std::cmp::min(width, MAX_AUTOFIT_WIDTH_PIXELS);
+        self
     }
 
     /// Autofit the worksheet columns up to a maximum width.
     ///
     /// The [`Worksheet::autofit()`] method above simulates Excel's column
-    /// autofit. On undesirable side-effect of this is that Excel autofits very
+    /// autofit. One undesirable side-effect of this is that Excel autofits very
     /// long strings up to limit of 255 characters/1790 pixels. This is often
     /// too wide to display on a single screen at normal zoom. As such the
     /// `autofit_to_max_width()` method is provided to enable a smaller upper
@@ -14619,13 +14641,14 @@ impl Worksheet {
     ///
     /// # Parameters
     ///
-    /// - `max_autofit_width`: The maximum column width, in pixels, to use for
+    /// - `width`: The maximum column width, in pixels, to use for
     ///   autofitting.
     ///
-    ///
-    pub fn autofit_to_max_width(&mut self, max_autofit_width: u32) -> &mut Worksheet {
-        let max_autofit_width = std::cmp::min(max_autofit_width, MAX_AUTOFIT_WIDTH_PIXELS);
-        self.autofit_worksheet(max_autofit_width)
+    #[doc(hidden)]
+    #[deprecated(since = "0.93.0", note = "use `set_autofit_max_width()` instead")]
+    pub fn autofit_to_max_width(&mut self, width: u32) -> &mut Worksheet {
+        self.set_autofit_max_width(width);
+        self.autofit_worksheet()
     }
 
     /// Set the worksheet name used in VBA macros.
@@ -17266,7 +17289,7 @@ impl Worksheet {
     //
     // This internal function supports autofitting to Excel's maximum cell width
     // or to a user defined value.
-    fn autofit_worksheet(&mut self, max_autofit_width: u32) -> &mut Worksheet {
+    fn autofit_worksheet(&mut self) -> &mut Worksheet {
         let mut max_widths: HashMap<ColNum, u32> = HashMap::new();
 
         #[cfg(feature = "enhanced_autofit")]
@@ -17378,9 +17401,9 @@ impl Worksheet {
                             pixel_width += 7;
                         }
 
-                        // Limit the autofit width to Excel's limit for `autofit()`
-                        // or to a user defined value for `autofit_to_max_width()`.
-                        pixel_width = std::cmp::min(pixel_width, max_autofit_width);
+                        // Limit the autofit width to Excel's limit for
+                        // `autofit()` or to a user defined value.
+                        pixel_width = std::cmp::min(pixel_width, self.max_autofit_width);
 
                         // Update the max column width.
                         if pixel_width > 0 {
