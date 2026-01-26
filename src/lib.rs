@@ -274,6 +274,8 @@
 //! - `constant_memory`: Keeps memory usage to a minimum when writing large
 //!   files. See [Constant Memory
 //!   Mode](performance/index.html#constant-memory-mode).
+//! - `enhanced_autofit`: Adds support for autofitting formatted numbers and
+//!   dates via the [`ssfmt`](https://crates.io/crates/ssfmt) crate.
 //! - `serde`: Adds support for Serde serialization.
 //! - `chrono`: Adds support for Chrono date/time types to the API. See
 //!   [`IntoExcelDateTime`].

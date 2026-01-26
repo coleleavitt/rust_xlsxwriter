@@ -35,7 +35,7 @@ pretty_assertions = "1.4"
 
 [features]
 # `default`: Includes all the standard functionality.
-default = ["ssfmt", "constant_memory"]
+default = []
 
 # `zlib`: Adds a dependency on zlib and a C compiler. This includes the same
 # features as `default` but is 1.5x faster for large files.
@@ -53,14 +53,14 @@ jiff = ["dep:jiff"]
 # to a minimum when writing large files.
 constant_memory = ["dep:tempfile"]
 
+# `enhanced_autofit`: This features provides autofit support for formatted
+# numbers via the `ssfmt` crate.
+enhanced_autofit = ["dep:ssfmt"]
+
 # `polars`: Adds support for mapping between `PolarsError` and
 # `rust_xlsxwriter::XlsxError` to make code that handles both types of errors
 # easier to write. See also `polars_write_excel`.
 polars = ["dep:polars"]
-
-# `ssfmt`: Adds support for the `ssfmt` crate for Excel number formatting. This
-# allows more accurate autofitting of formatted numbers.
-ssfmt = ["dep:ssfmt"]
 
 # `serde`: Adds support for Serde serialization.
 serde = ["dep:serde", "dep:rust_xlsxwriter_derive"]

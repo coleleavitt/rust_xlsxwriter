@@ -183,6 +183,8 @@ These are all off by default.
 
 - `constant_memory`: Keeps memory usage to a minimum when writing large files.
   See [Constant Memory Mode].
+- `enhanced_autofit`: Adds support for autofitting formatted numbers and dates
+  via the `ssfmt` crate.
 - `serde`: Adds support for Serde serialization.
 - `chrono`: Adds support for Chrono date/time types to the API. See
   [`IntoExcelDateTime`].

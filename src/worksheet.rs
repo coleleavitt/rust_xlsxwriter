@@ -74,8 +74,8 @@
 //! }
 //! ```
 //!
-//! For more details on the Worksheet APIs, see the [`Worksheet`]
-//! documentation and the sections below.
+//! For more details on the Worksheet APIs, see the [`Worksheet`] documentation
+//! and the sections below.
 //!
 //! # Contents
 //!
@@ -113,8 +113,8 @@
 //! # Creating worksheets
 //!
 //! There are two ways to create a Worksheet object with `rust_xlsxwriter`:
-//! using the [`Workbook::add_worksheet()`] method or the
-//! [`Worksheet::new()`] constructor.
+//! using the [`Workbook::add_worksheet()`] method or the [`Worksheet::new()`]
+//! constructor.
 //!
 //! The first method ties the worksheet to a workbook object that will
 //! automatically write the worksheet when the file is saved, whereas the second
@@ -133,8 +133,8 @@
 //! workable if you can create and use the worksheets sequentially since you
 //! will only need to have one reference at any one time.
 //!
-//! However, if you can’t structure your code to work sequentially, you can
-//! get a reference to a previously created worksheet using
+//! However, if you can’t structure your code to work sequentially, you can get
+//! a reference to a previously created worksheet using
 //! [`Workbook::worksheet_from_index()`]. The standard borrow checking rules
 //! still apply so you will have to give up ownership of any other worksheet
 //! reference prior to calling this method.
@@ -783,7 +783,11 @@
 //! As such [`Worksheet::autofit()`] simulates this behavior by calculating
 //! string widths using metrics taken from Excel. This isn't perfect but for
 //! most cases it should be sufficient and if not you can set your own widths,
-//! see below.
+//! see below. It can also be improved by enabling the `enhanced_autofit` feature
+//! which uses the [`ssfmt`] crate to provide more accurate string width
+//! calculations for formatted numbers and dates.
+//!
+//! [`ssfmt`]: https://crates.io/crates/ssfmt
 //!
 //! The `Worksheet::autofit()` method ignores columns that already have an
 //! explicit column width set via [`Worksheet::set_column_width()`] or
@@ -1377,7 +1381,7 @@ use crate::{
     SerializationHeaderConfig, SerializeFieldOptions, SerializerHeader, TableData, XlsxSerialize,
 };
 
-#[cfg(feature = "ssfmt")]
+#[cfg(feature = "enhanced_autofit")]
 use ssfmt::{FormatOptions, NumberFormat};
 
 use crate::drawing::{Drawing, DrawingCoordinates, DrawingInfo, DrawingObject, DrawingType};
@@ -14477,7 +14481,7 @@ impl Worksheet {
     ///
     /// The `rust_xlsxwriter` library doesn't have access to these Windows
     /// functions so it simulates autofit by calculating string widths based on
-    /// metrics taken from Excel.
+    /// font character metrics taken from Excel.
     ///
     /// This isn't perfect but for most cases it should be sufficient and
     /// indistinguishable from the output of Excel. However there are some
@@ -14485,8 +14489,9 @@ impl Worksheet {
     ///
     /// - It is based on the default Excel font type and size of Calibri 11. It
     ///   will not give accurate results for other fonts or font sizes.
-    /// - It doesn't take formatting of numbers or dates account, although this
-    ///   may be addressed in a later version.
+    /// - It only takes formatting of numbers or dates into account if the
+    ///   `enhanced_autofit` feature is enabled, which requires the [`ssfmt`]
+    ///   crate. See the second example below.
     /// - Autofit is a relatively expensive operation since it performs a
     ///   calculation for all the populated cells in a worksheet. See the note
     ///   on performance below.
@@ -14515,6 +14520,7 @@ impl Worksheet {
     ///
     /// [Autofitting Columns]:
     ///     https://rustxlsxwriter.github.io/examples/autofit.html
+    /// [`ssfmt`]: https://crates.io/crates/ssfmt
     ///
     /// ```
     /// # // This code is available in examples/doc_worksheet_autofit.rs
@@ -14548,7 +14554,54 @@ impl Worksheet {
     /// <img
     /// src="https://rustxlsxwriter.github.io/images/worksheet_autofit.png">
     ///
+    /// The following example demonstrates autofitting data with different
+    /// number formats. This requires the `enhanced_autofit` feature to be
+    /// enabled.
     ///
+    /// ```
+    /// # // This code is available in examples/doc_worksheet_autofit_with_format.rs
+    /// #
+    /// # use rust_xlsxwriter::{Format, Workbook, XlsxError};
+    /// #
+    /// # fn main() -> Result<(), XlsxError> {
+    /// #     let mut workbook = Workbook::new();
+    /// #
+    /// #     // Add a worksheet to the workbook.
+    /// #     let worksheet = workbook.add_worksheet();
+    /// #
+    ///     // Create some formats to use with the data below.
+    ///     let format1 = Format::new().set_num_format("0");
+    ///     let format2 = Format::new().set_num_format("000");
+    ///     let format3 = Format::new().set_num_format("00000");
+    ///     let format4 = Format::new().set_num_format("0000000");
+    ///     let format5 = Format::new().set_num_format("000000000");
+    ///
+    ///     // Write a number with different Excel formats.
+    ///     worksheet.write_with_format(0, 0, 1, &format1)?;
+    ///     worksheet.write_with_format(0, 1, 1, &format2)?;
+    ///     worksheet.write_with_format(0, 2, 1, &format3)?;
+    ///     worksheet.write_with_format(0, 3, 1, &format4)?;
+    ///     worksheet.write_with_format(0, 4, 1, &format5)?;
+    ///
+    ///     // Autofit the data.
+    ///     worksheet.autofit();
+    /// #
+    /// #     workbook.save("worksheet.xlsx")?;
+    /// #
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Output file:
+    ///
+    /// <img
+    /// src="https://rustxlsxwriter.github.io/images/worksheet_autofit_with_format1.png">
+    ///
+    /// Note, if the `enhanced_autofit` feature is not enabled the output will
+    /// look like this:
+    ///
+    /// <img
+    /// src="https://rustxlsxwriter.github.io/images/worksheet_autofit_with_format2.png">
     ///
     pub fn autofit(&mut self) -> &mut Worksheet {
         self.autofit_worksheet(MAX_AUTOFIT_WIDTH_PIXELS)
@@ -17216,7 +17269,7 @@ impl Worksheet {
     fn autofit_worksheet(&mut self, max_autofit_width: u32) -> &mut Worksheet {
         let mut max_widths: HashMap<ColNum, u32> = HashMap::new();
 
-        #[cfg(feature = "ssfmt")]
+        #[cfg(feature = "enhanced_autofit")]
         let number_formatters = self.get_number_formatters();
 
         let (first_row, last_row) = if self.use_constant_memory {
@@ -17253,9 +17306,9 @@ impl Worksheet {
                             // For numbers we use a workaround based on the
                             // length or, if `ssfmt` is enabled, we use the
                             // formatted string width.
-                            #[cfg(not(feature = "ssfmt"))]
+                            #[cfg(not(feature = "enhanced_autofit"))]
                             CellType::Number { number, .. } => 7 * number.to_string().len() as u32,
-                            #[cfg(feature = "ssfmt")]
+                            #[cfg(feature = "enhanced_autofit")]
                             CellType::Number { number, xf_index } => self.formatted_number_width(
                                 row_num,
                                 col_num,
@@ -17269,9 +17322,9 @@ impl Worksheet {
                             // `ssfmt` is enabled we use the formatted string
                             // width otherwise we use an approximation based on
                             // Excel's default format: mm/dd/yyyy.
-                            #[cfg(not(feature = "ssfmt"))]
+                            #[cfg(not(feature = "enhanced_autofit"))]
                             CellType::DateTime { .. } => 68,
-                            #[cfg(feature = "ssfmt")]
+                            #[cfg(feature = "enhanced_autofit")]
                             CellType::DateTime { number, xf_index } => self.formatted_number_width(
                                 row_num,
                                 col_num,
@@ -17359,7 +17412,7 @@ impl Worksheet {
 
     // Get the width of a number with the Excel number format applied using the
     // optional `ssfmt` crate.
-    #[cfg(feature = "ssfmt")]
+    #[cfg(feature = "enhanced_autofit")]
     fn formatted_number_width(
         &self,
         row: RowNum,
@@ -17400,7 +17453,7 @@ impl Worksheet {
     // Get a map of format indices that have a number format to the `ssfmt`
     // NumberFormat formatters. This takes into account if the worksheet formats
     // are stored locally (the default) or globally in "constant_memory" mode.
-    #[cfg(feature = "ssfmt")]
+    #[cfg(feature = "enhanced_autofit")]
     fn get_number_formatters(&self) -> HashMap<u32, NumberFormat> {
         use std::collections::hash_map::Entry;
         let mut number_formatters: HashMap<u32, NumberFormat> = HashMap::new();

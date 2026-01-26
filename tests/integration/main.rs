@@ -20,7 +20,7 @@ mod autofit01;
 mod autofit02;
 mod autofit03;
 mod autofit04;
-#[cfg(not(feature = "ssfmt"))]
+#[cfg(not(feature = "enhanced_autofit"))]
 mod autofit05;
 mod autofit06;
 mod autofit07;
@@ -31,15 +31,15 @@ mod autofit11;
 mod autofit12;
 mod autofit13;
 mod autofit14;
-#[cfg(feature = "ssfmt")]
+#[cfg(feature = "enhanced_autofit")]
 mod autofit_with_format01;
-#[cfg(feature = "ssfmt")]
+#[cfg(feature = "enhanced_autofit")]
 mod autofit_with_format02;
-#[cfg(feature = "ssfmt")]
+#[cfg(feature = "enhanced_autofit")]
 mod autofit_with_format03;
-#[cfg(feature = "ssfmt")]
+#[cfg(feature = "enhanced_autofit")]
 mod autofit_with_format04;
-#[cfg(feature = "ssfmt")]
+#[cfg(feature = "enhanced_autofit")]
 mod autofit_with_format05;
 mod background01;
 mod background02;
