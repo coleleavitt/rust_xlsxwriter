@@ -9,7 +9,7 @@ use crate::common;
 use rust_xlsxwriter::{ExcelDateTime, Format, Workbook, XlsxError};
 
 // Test to demonstrate autofit with a formatted native date.
-fn create_new_xlsx_file_1(filename: &str) -> Result<(), XlsxError> {
+fn create_new_xlsx_file_standard(filename: &str) -> Result<(), XlsxError> {
     let mut workbook = Workbook::new();
 
     let worksheet = workbook.add_worksheet();
@@ -30,7 +30,7 @@ fn create_new_xlsx_file_1(filename: &str) -> Result<(), XlsxError> {
 
 // Test to demonstrate autofit. With Chrono date.
 #[cfg(feature = "chrono")]
-fn create_new_xlsx_file_2(filename: &str) -> Result<(), XlsxError> {
+fn create_new_xlsx_file_chrono(filename: &str) -> Result<(), XlsxError> {
     let mut workbook = Workbook::new();
 
     let worksheet = workbook.add_worksheet();
@@ -51,7 +51,7 @@ fn create_new_xlsx_file_2(filename: &str) -> Result<(), XlsxError> {
 
 // Test to demonstrate autofit. With jiff date.
 #[cfg(feature = "jiff")]
-fn create_new_xlsx_file_3(filename: &str) -> Result<(), XlsxError> {
+fn create_new_xlsx_file_jiff(filename: &str) -> Result<(), XlsxError> {
     let mut workbook = Workbook::new();
 
     let worksheet = workbook.add_worksheet();
@@ -71,10 +71,10 @@ fn create_new_xlsx_file_3(filename: &str) -> Result<(), XlsxError> {
 }
 
 #[test]
-fn test_autofit_with_format05_1() {
+fn test_autofit_with_format05_standard() {
     let test_runner = common::TestRunner::new()
         .set_name("autofit_with_format05")
-        .set_function(create_new_xlsx_file_1)
+        .set_function(create_new_xlsx_file_standard)
         .unique("1")
         .initialize();
 
@@ -84,10 +84,10 @@ fn test_autofit_with_format05_1() {
 
 #[test]
 #[cfg(feature = "chrono")]
-fn test_autofit_with_format05_2() {
+fn test_autofit_with_format05_chrono() {
     let test_runner = common::TestRunner::new()
         .set_name("autofit_with_format05")
-        .set_function(create_new_xlsx_file_2)
+        .set_function(create_new_xlsx_file_chrono)
         .unique("2")
         .initialize();
 
@@ -97,10 +97,10 @@ fn test_autofit_with_format05_2() {
 
 #[test]
 #[cfg(feature = "jiff")]
-fn test_autofit_with_format05_3() {
+fn test_autofit_with_format05_jiff() {
     let test_runner = common::TestRunner::new()
         .set_name("autofit_with_format05")
-        .set_function(create_new_xlsx_file_3)
+        .set_function(create_new_xlsx_file_jiff)
         .unique("3")
         .initialize();
 

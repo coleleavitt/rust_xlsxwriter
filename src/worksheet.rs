@@ -17367,7 +17367,7 @@ impl Worksheet {
         number: f64,
         xf_index: u32,
         default: u32,
-        number_formatters: &HashMap<String, NumberFormat>,
+        number_formatters: &HashMap<u32, NumberFormat>,
     ) -> u32 {
         // Check for a non-zero (i.e., formatted) xf_index, in the cell, row,
         // and column. This is the Excel precedence order.
@@ -17388,14 +17388,8 @@ impl Worksheet {
             return default;
         }
 
-        // Get the cell format and number format string (if any).
-        let cell_format = &self.xf_formats[xf_index as usize];
-        let number_format = &cell_format.num_format;
-        if number_format.is_empty() {
-            return default;
-        }
-
-        if let Some(formatter) = number_formatters.get(number_format) {
+        // Get the number formatter for the cell (if any).
+        if let Some(formatter) = number_formatters.get(&xf_index) {
             let formatted_string = formatter.format(number, &FormatOptions::default());
             utility::pixel_width(&formatted_string)
         } else {
@@ -17403,19 +17397,38 @@ impl Worksheet {
         }
     }
 
-    // Get a map of the number format strings to ssfmt::NumberFormat formatters.
+    // Get a map of format indices that have a number format to the `ssfmt`
+    // NumberFormat formatters. This takes into account if the worksheet formats
+    // are stored locally (the default) or globally in "constant_memory" mode.
     #[cfg(feature = "ssfmt")]
-    fn get_number_formatters(&self) -> HashMap<String, NumberFormat> {
+    fn get_number_formatters(&self) -> HashMap<u32, NumberFormat> {
         use std::collections::hash_map::Entry;
+        let mut number_formatters: HashMap<u32, NumberFormat> = HashMap::new();
 
-        let mut number_formatters: HashMap<String, NumberFormat> = HashMap::new();
+        if self.has_workbook_global_xfs {
+            // If the xf are stored globally then we need to read them from the
+            // workbook, with a read lock.
+            let xf_formats = self.workbook_xf_indices.read().expect("RwLock poisoned");
 
-        for cell_format in &self.xf_formats {
-            let number_format = &cell_format.num_format;
-            if !number_format.is_empty() {
-                if let Entry::Vacant(e) = number_formatters.entry(number_format.clone()) {
-                    if let Ok(formatter) = NumberFormat::parse(number_format) {
-                        e.insert(formatter);
+            for (cell_format, index) in xf_formats.iter() {
+                let number_format = &cell_format.num_format;
+                if !number_format.is_empty() {
+                    if let Entry::Vacant(e) = number_formatters.entry(*index) {
+                        if let Ok(formatter) = NumberFormat::parse(number_format) {
+                            e.insert(formatter);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Otherwise read the local worksheet xf formats.
+            for (index, cell_format) in self.xf_formats.iter().enumerate() {
+                let number_format = &cell_format.num_format;
+                if !number_format.is_empty() {
+                    if let Entry::Vacant(e) = number_formatters.entry(index as u32) {
+                        if let Ok(formatter) = NumberFormat::parse(number_format) {
+                            e.insert(formatter);
+                        }
                     }
                 }
             }

@@ -6,10 +6,10 @@
 // Copyright 2022-2026, John McNamara, jmcnamara@cpan.org
 
 use crate::common;
-use rust_xlsxwriter::{Format, Workbook, XlsxError};
+use rust_xlsxwriter::{Format, Workbook, Worksheet, XlsxError};
 
 // Test to demonstrate autofit with a formatted number.
-fn create_new_xlsx_file(filename: &str) -> Result<(), XlsxError> {
+fn create_new_xlsx_file_standard(filename: &str) -> Result<(), XlsxError> {
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();
 
@@ -27,11 +27,83 @@ fn create_new_xlsx_file(filename: &str) -> Result<(), XlsxError> {
     Ok(())
 }
 
+// Test with standalone worksheet.
+fn create_new_xlsx_file_standalone(filename: &str) -> Result<(), XlsxError> {
+    let mut workbook = Workbook::new();
+
+    let format1 = Format::new().set_num_format("0.000");
+
+    let mut worksheet = Worksheet::new();
+
+    worksheet.set_column_format(0, &format1)?;
+
+    worksheet.write(0, 0, 1234.02)?;
+
+    worksheet.autofit();
+
+    worksheet.set_paper_size(9);
+
+    workbook.push_worksheet(worksheet);
+
+    workbook.save(filename)?;
+
+    Ok(())
+}
+
+// Test with constant memory worksheet. This will only work for one row at a
+// time, but that is sufficient for this test.
+#[cfg(feature = "constant_memory")]
+fn create_new_xlsx_file_constant_memory(filename: &str) -> Result<(), XlsxError> {
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet_with_constant_memory();
+
+    let format1 = Format::new().set_num_format("0.000");
+    worksheet.set_column_format(0, &format1)?;
+
+    worksheet.write(0, 0, 1234.02)?;
+
+    worksheet.autofit();
+
+    worksheet.set_paper_size(9);
+
+    workbook.save(filename)?;
+
+    Ok(())
+}
+
 #[test]
-fn test_autofit_with_format03() {
+fn test_autofit_with_format03_standard() {
     let test_runner = common::TestRunner::new()
         .set_name("autofit_with_format03")
-        .set_function(create_new_xlsx_file)
+        .set_function(create_new_xlsx_file_standard)
+        .unique("standard")
+        .initialize();
+
+    test_runner.assert_eq();
+    test_runner.cleanup();
+}
+
+#[test]
+fn test_autofit_with_format03_standalone() {
+    let test_runner = common::TestRunner::new()
+        .set_name("autofit_with_format03")
+        .set_function(create_new_xlsx_file_standalone)
+        .unique("standalone")
+        .initialize();
+
+    test_runner.assert_eq();
+    test_runner.cleanup();
+}
+
+#[test]
+#[cfg(feature = "constant_memory")]
+fn test_autofit_with_format03_constant_memory() {
+    let test_runner = common::TestRunner::new()
+        .set_name("autofit_with_format03")
+        .set_function(create_new_xlsx_file_constant_memory)
+        .unique("constant_memory")
+        // ignore the row "spans" attribute in constant memory mode.
+        .ignore_elements("xl/worksheets/sheet1.xml", "<row")
         .initialize();
 
     test_runner.assert_eq();
