@@ -1377,6 +1377,9 @@ use crate::{
     SerializationHeaderConfig, SerializeFieldOptions, SerializerHeader, TableData, XlsxSerialize,
 };
 
+#[cfg(feature = "ssfmt")]
+use ssfmt::{FormatOptions, NumberFormat};
+
 use crate::drawing::{Drawing, DrawingCoordinates, DrawingInfo, DrawingObject, DrawingType};
 use crate::error::XlsxError;
 use crate::format::Format;
@@ -17213,6 +17216,9 @@ impl Worksheet {
     fn autofit_worksheet(&mut self, max_autofit_width: u32) -> &mut Worksheet {
         let mut max_widths: HashMap<ColNum, u32> = HashMap::new();
 
+        #[cfg(feature = "ssfmt")]
+        let number_formatters = self.get_number_formatters();
+
         let (first_row, last_row) = if self.use_constant_memory {
             (self.current_row, self.current_row)
         } else {
@@ -17256,6 +17262,7 @@ impl Worksheet {
                                 *number,
                                 *xf_index,
                                 7 * number.to_string().len() as u32,
+                                &number_formatters,
                             ),
 
                             // Datetimes are just numbers with a date format. If
@@ -17265,8 +17272,14 @@ impl Worksheet {
                             #[cfg(not(feature = "ssfmt"))]
                             CellType::DateTime { .. } => 68,
                             #[cfg(feature = "ssfmt")]
-                            CellType::DateTime { number, xf_index } => self
-                                .formatted_number_width(row_num, col_num, *number, *xf_index, 68),
+                            CellType::DateTime { number, xf_index } => self.formatted_number_width(
+                                row_num,
+                                col_num,
+                                *number,
+                                *xf_index,
+                                68,
+                                &number_formatters,
+                            ),
 
                             // For Boolean types we use the Excel standard
                             // widths for TRUE and FALSE.
@@ -17354,9 +17367,8 @@ impl Worksheet {
         number: f64,
         xf_index: u32,
         default: u32,
+        number_formatters: &HashMap<String, NumberFormat>,
     ) -> u32 {
-        use ssfmt::format_default;
-
         // Check for a non-zero (i.e., formatted) xf_index, in the cell, row,
         // and column. This is the Excel precedence order.
         let mut xf_index = xf_index;
@@ -17383,11 +17395,33 @@ impl Worksheet {
             return default;
         }
 
-        // Format the number according to the cell format.
-        match format_default(number, number_format) {
-            Ok(formatted_string) => utility::pixel_width(&formatted_string),
-            Err(_) => default,
+        if let Some(formatter) = number_formatters.get(number_format) {
+            let formatted_string = formatter.format(number, &FormatOptions::default());
+            utility::pixel_width(&formatted_string)
+        } else {
+            default
         }
+    }
+
+    // Get a map of the number format strings to ssfmt::NumberFormat formatters.
+    #[cfg(feature = "ssfmt")]
+    fn get_number_formatters(&self) -> HashMap<String, NumberFormat> {
+        use std::collections::hash_map::Entry;
+
+        let mut number_formatters: HashMap<String, NumberFormat> = HashMap::new();
+
+        for cell_format in &self.xf_formats {
+            let number_format = &cell_format.num_format;
+            if !number_format.is_empty() {
+                if let Entry::Vacant(e) = number_formatters.entry(number_format.clone()) {
+                    if let Ok(formatter) = NumberFormat::parse(number_format) {
+                        e.insert(formatter);
+                    }
+                }
+            }
+        }
+
+        number_formatters
     }
 
     // Set the row properties (outline level and hidden) for a range of grouped
