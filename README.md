@@ -216,8 +216,8 @@ cargo add rust_xlsxwriter -F constant_memory
 
 Recent changes:
 
+- Added support for autofitting formatted numbers and dates.
 - Added support for workbook themes.
-- Added support for grouped and non-contiguous chart ranges.
 
 See the full [Release Notes and Changelog].
 

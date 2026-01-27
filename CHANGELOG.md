@@ -5,6 +5,43 @@ This is the changelog/release notes for the `rust_xlsxwriter` crate.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.93.0] - 2026-01-27
+
+### Added
+
+- Added support for autofitting formatted numbers and dates like `$1,000,000.00`
+  or `January 1 2026`. This requires the optional [`ssfmt`] crate and is enabled
+  by the `enhanced_autofit` feature flag.  For cells with number formats the
+  width of the formatted number is now taken into account, like this example
+  where the number 1 is formatted in different ways:
+
+  <img src="https://rustxlsxwriter.github.io/images/worksheet_autofit_with_format1.png">
+
+  The previous behaviour, and the behaviour without the `enhanced_autofit`
+  feature enabled, was to produce a file that looked like this:
+
+  <img src="https://rustxlsxwriter.github.io/images/worksheet_autofit_with_format2.png">
+
+- Added the [`Worksheet::set_autofit_max_row()`] method to limit the number of
+  rows processed when applying `Worksheet::autofit()`. This is a performance
+  workaround for autofitting large datasets where a value of 200-500 rows can be
+  used to autofit the data in the visible row range of most users.
+
+- Added the [`Worksheet::set_autofit_max_width()`] method to enable an upper
+  bound column width when autofitting long strings. This replaces the deprecated
+  `Worksheet::autofit_to_max_width()` method.
+
+  [`ssfmt`]: https://crates.io/crates/ssfmt
+  [`Worksheet::set_autofit_max_width()`]: https://docs.rs/rust_xlsxwriter/latest/rust_xlsxwriter/worksheet/struct.Worksheet.html#method.set_autofit_max_width
+  [`Worksheet::set_autofit_max_row()`]: https://docs.rs/rust_xlsxwriter/latest/rust_xlsxwriter/worksheet/struct.Worksheet.html#method.set_autofit_max_row
+
+
+### Deprecated
+
+- Deprecated the  `Worksheet::autofit_to_max_width()` method. It is replaced
+  with [`Worksheet::set_autofit_max_width()`] and [`Worksheet::autofit()`]
+
+
 ## [0.92.4] - 2026-01-24
 
 ### Fixed
