@@ -1638,6 +1638,7 @@ pub struct Worksheet {
     outline_symbols_above: bool,
     outline_symbols_left: bool,
     max_autofit_width: u32,
+    max_autofit_row: RowNum,
 
     #[cfg(feature = "constant_memory")]
     pub(crate) file_writer: BufWriter<File>,
@@ -1867,6 +1868,7 @@ impl Worksheet {
             outline_symbols_left: false,
             background_image: None,
             max_autofit_width: MAX_AUTOFIT_WIDTH_PIXELS,
+            max_autofit_row: ROW_MAX - 1,
 
             // These collections need to be reset on resave.
             comment_relationships: vec![],
@@ -14609,23 +14611,47 @@ impl Worksheet {
         self.autofit_worksheet()
     }
 
-    /// set the maximum autofit width for worksheet columns.
+    /// Set the maximum row used for autofitting worksheet columns.
     ///
-    /// The [`Worksheet::autofit()`] method above simulates Excel's column
-    /// autofit. One undesirable side-effect of this is that Excel autofits very
-    /// long strings up to limit of 255 characters/1790 pixels. This is often
-    /// too wide to display on a single screen at normal zoom. As such the
-    /// `set_autofit_max_width()` method can be used to set a smaller upper
-    /// limit for autofitting long strings. A value of 300 pixels is recommended
-    /// as a good compromise between column width and readability.
+    /// The [`Worksheet::autofit()`] method simulates Excel's column autofit. By
+    /// default `autofit()` processes each cell in the worksheet which, for
+    /// large datasets, can be time consuming. The `set_autofit_max_row()`
+    /// method can be used to limit the number of rows processed for
+    /// autofitting. Since a user can typically only see about 50 to 100 rows on
+    /// a screen at a time it is often sufficient to autofit the first few
+    /// hundred rows. This can significantly speed up the autofit operation on
+    /// large datasets.
+    ///
+    /// A value of 200 rows is recommended as a good compromise between
+    /// performance and visual accuracy.
     ///
     /// # Parameters
     ///
-    /// - `width`: The maximum column width, in pixels, to use for autofitting.
+    /// - `max_row`: The maximum row number to use for autofitting.
     ///
+    pub fn set_autofit_max_row(&mut self, max_row: RowNum) -> &mut Worksheet {
+        self.max_autofit_row = std::cmp::min(max_row, ROW_MAX - 1);
+        self
+    }
+
+    /// Set the maximum autofit width for worksheet columns.
     ///
-    pub fn set_autofit_max_width(&mut self, width: u32) -> &mut Worksheet {
-        self.max_autofit_width = std::cmp::min(width, MAX_AUTOFIT_WIDTH_PIXELS);
+    /// The [`Worksheet::autofit()`] method simulates Excel's column autofit.
+    /// One undesirable side-effect of this is that Excel autofits very long
+    /// strings up to limit of 255 characters/1790 pixels. This is often too
+    /// wide to display on a single screen at normal zoom. As such the
+    /// `set_autofit_max_width()` method can be used to set a smaller upper
+    /// limit for autofitting long strings.
+    ///
+    /// A value of 300 pixels is recommended as a good compromise between column
+    /// width and readability.
+    ///
+    /// # Parameters
+    ///
+    /// - `max_width`: The maximum column width, in pixels, to use for autofitting.
+    ///
+    pub fn set_autofit_max_width(&mut self, max_width: u32) -> &mut Worksheet {
+        self.max_autofit_width = std::cmp::min(max_width, MAX_AUTOFIT_WIDTH_PIXELS);
         self
     }
 
@@ -14641,13 +14667,16 @@ impl Worksheet {
     ///
     /// # Parameters
     ///
-    /// - `width`: The maximum column width, in pixels, to use for
+    /// - `max_width`: The maximum column width, in pixels, to use for
     ///   autofitting.
     ///
     #[doc(hidden)]
-    #[deprecated(since = "0.93.0", note = "use `set_autofit_max_width()` instead")]
-    pub fn autofit_to_max_width(&mut self, width: u32) -> &mut Worksheet {
-        self.set_autofit_max_width(width);
+    #[deprecated(
+        since = "0.93.0",
+        note = "use `set_autofit_max_width()` and `autofit()` instead"
+    )]
+    pub fn autofit_to_max_width(&mut self, max_width: u32) -> &mut Worksheet {
+        self.set_autofit_max_width(max_width);
         self.autofit_worksheet()
     }
 
@@ -17286,9 +17315,6 @@ impl Worksheet {
     // The `rust_xlsxwriter` library doesn't have access to the Windows
     // functions that Excel has so it simulates autofit by calculating string
     // widths using metrics taken from Excel.
-    //
-    // This internal function supports autofitting to Excel's maximum cell width
-    // or to a user defined value.
     fn autofit_worksheet(&mut self) -> &mut Worksheet {
         let mut max_widths: HashMap<ColNum, u32> = HashMap::new();
 
@@ -17302,8 +17328,13 @@ impl Worksheet {
         };
 
         // Iterate over all of the data in the worksheet and find the max data
-        // width for each column.
+        // width for each column. It is possible to exit early if the user has
+        // set a maximum autofit row limit.
         for row_num in first_row..=last_row {
+            if row_num >= self.max_autofit_row {
+                break;
+            }
+
             if let Some(columns) = self.data_table.get(&row_num) {
                 for col_num in self.dimensions.first_col..=self.dimensions.last_col {
                     if let Some(cell) = columns.get(&col_num) {
