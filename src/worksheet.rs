@@ -14497,8 +14497,9 @@ impl Worksheet {
     ///   `enhanced_autofit` feature is enabled, which requires the [`ssfmt`]
     ///   crate. See the second example below.
     /// - Autofit is a relatively expensive operation since it performs a
-    ///   calculation for all the populated cells in a worksheet. See the note
-    ///   on performance below.
+    ///   calculation for all the populated cells in a worksheet. This can be
+    ///   mitigated by using the [`Worksheet::set_autofit_max_row()`] method,
+    ///   see below.
     ///
     /// For cases that don't match your desired output you can set explicit
     /// column widths via [`Worksheet::set_column_width()`] or
@@ -14506,15 +14507,7 @@ impl Worksheet {
     /// columns that have already been explicitly set if the width is greater
     /// than the calculated autofit width. Alternatively, setting the column
     /// width explicitly after calling `autofit()` will override the autofit
-    /// value. See also [`Worksheet::autofit_to_max_width()`] below.
-    ///
-    /// **Performance**: By default `autofit()` performs a length calculation
-    /// for each populated cell in a worksheet. For very large worksheets this
-    /// could be slow. However, it is possible to mitigate this by calling
-    /// `autofit()` after writing the first 100 or 200 rows. This will produce a
-    /// reasonably accurate autofit for the first visible page of data without
-    /// incurring the performance penalty of autofitting thousands of
-    /// non-visible rows.
+    /// value.
     ///
     /// # Examples
     ///
@@ -14613,14 +14606,15 @@ impl Worksheet {
 
     /// Set the maximum row used for autofitting worksheet columns.
     ///
-    /// The [`Worksheet::autofit()`] method simulates Excel's column autofit. By
-    /// default `autofit()` processes each cell in the worksheet which, for
-    /// large datasets, can be time consuming. The `set_autofit_max_row()`
-    /// method can be used to limit the number of rows processed for
-    /// autofitting. Since a user can typically only see about 50 to 100 rows on
-    /// a screen at a time it is often sufficient to autofit the first few
-    /// hundred rows. This can significantly speed up the autofit operation on
-    /// large datasets.
+    /// The [`Worksheet::autofit()`] method simulates Excel's column autofit by
+    /// calculating the width of each cell based on its contents formatted as a
+    /// string which, for large datasets, this can be an expensive operation. In
+    /// order to mitigate this the `set_autofit_max_row()` method can be used to
+    /// limit the number of rows processed for autofitting. This takes advantage
+    /// of the fact that a user will typically only see about 50 to 100 rows on
+    /// a screen so it is often sufficient to autofit just the first few hundred
+    /// rows. This can significantly speed up the autofit operation for large
+    /// datasets.
     ///
     /// A value of 200 rows is recommended as a good compromise between
     /// performance and visual accuracy.

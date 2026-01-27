@@ -2355,6 +2355,10 @@ fn main() -> Result<(), XlsxError> {
 This is an example of using the simulated autofit option to automatically set
 worksheet column widths based on the data in the column.
 
+To get better results for autofitting numbers and dates you can enable the
+`enhanced_autofit` feature in your `Cargo.toml` file. This uses the `ssfmt`
+crate to more accurately simulate Excel's number formatting.
+
 **Image of the output file:**
 
 <img src="https://rustxlsxwriter.github.io/images/autofit.png">

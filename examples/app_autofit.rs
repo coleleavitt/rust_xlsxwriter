@@ -4,6 +4,10 @@
 
 //! An example of using simulated autofit to automatically adjust the width of
 //! worksheet columns based on the data in the cells.
+//!
+//! To get better results for autofitting numbers and dates you can enable the
+//! `enhanced_autofit` feature in your `Cargo.toml` file. This uses the `ssfmt`
+//! crate to more accurately simulate Excel's number formatting.
 
 use rust_xlsxwriter::{Workbook, XlsxError};
 

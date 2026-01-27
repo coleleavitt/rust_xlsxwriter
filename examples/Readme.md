@@ -19,7 +19,10 @@ documentation and generally show how an individual function works.
   and some is hidden.
 
 * `app_autofit.rs` - An example of using simulated autofit to automatically
-  adjust the width of worksheet columns based on the data in the cells.
+  adjust the width of worksheet columns based on the data in the cells. To
+  get better results for autofitting numbers and dates you can enable the
+  `enhanced_autofit` feature in your `Cargo.toml` file. This uses the
+  `ssfmt` crate to more accurately simulate Excel's number formatting.
 
 * `app_background_image.rs` - An example of inserting a background image
   into a worksheet using `rust_xlsxwriter`. See also the `app_watermark.rs`
@@ -1357,6 +1360,10 @@ documentation and generally show how an individual function works.
 
 * `doc_worksheet_autofilter.rs` - Demonstrates setting a simple autofilter
   in a worksheet.
+
+* `doc_worksheet_autofit_with_format.rs` - Demonstrates autofitting data
+  with different number formats. This required the `enhanced_autofit`
+  feature to be enabled.
 
 * `doc_worksheet_autofit.rs` - Demonstrates auto-fitting the worksheet
   column widths based on the data in the columns.
