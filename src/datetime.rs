@@ -1286,6 +1286,7 @@ impl ExcelDateTime {
     }
 
     // Check if a year is a leap year.
+    #[allow(clippy::manual_is_multiple_of)] // Can't use until MSRV >= 1.90.0.
     pub(crate) fn is_leap_year(year: u64) -> bool {
         year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
     }
