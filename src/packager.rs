@@ -274,6 +274,31 @@ impl<W: Write + Seek + Send> Packager<W> {
             content_types.add_comments_name(i + 1);
         }
 
+        for i in 0..options.num_pivot_tables {
+            content_types.add_pivot_table_name(i + 1);
+        }
+
+        for i in 0..options.num_pivot_caches {
+            content_types.add_pivot_cache_definition_name(i + 1);
+            content_types.add_pivot_cache_records_name(i + 1);
+        }
+
+        for i in 0..options.num_slicer_caches {
+            content_types.add_slicer_cache_name(i + 1);
+        }
+
+        for i in 0..options.num_slicers {
+            content_types.add_slicer_name(i + 1);
+        }
+
+        for i in 0..options.num_threaded_comments {
+            content_types.add_threaded_comments_name(i + 1);
+        }
+
+        if options.has_persons {
+            content_types.add_persons();
+        }
+
         if options.has_sst_table {
             content_types.add_share_strings();
         }
@@ -1053,6 +1078,87 @@ impl<W: Write + Seek + Send> Packager<W> {
         Ok(())
     }
 
+    // Write the pivot table files.
+    // Note: This is infrastructure for future pivot table support.
+    // When PivotTable storage is added to Worksheet, this will be filled in.
+    #[allow(dead_code)]
+    fn write_pivot_table_files(&mut self, _workbook: &mut Workbook) -> Result<(), XlsxError> {
+        // TODO: Iterate through worksheets and write pivot table XML files
+        // let mut index = 1;
+        // for worksheet in &mut workbook.worksheets {
+        //     for pivot_table in &mut worksheet.pivot_tables {
+        //         let filename = format!("xl/pivotTables/pivotTable{index}.xml");
+        //         self.zip.start_file(filename, self.zip_options)?;
+        //         pivot_table.assemble_xml_file();
+        //         self.zip.write_all(pivot_table.writer.get_ref())?;
+        //         index += 1;
+        //     }
+        // }
+        Ok(())
+    }
+
+    // Write the pivot cache files.
+    #[allow(dead_code)]
+    fn write_pivot_cache_files(&mut self, _workbook: &mut Workbook) -> Result<(), XlsxError> {
+        // TODO: Iterate through pivot caches and write definition + records XML files
+        // Pivot caches are workbook-level, shared across pivot tables
+        Ok(())
+    }
+
+    // Write the slicer files.
+    #[allow(dead_code)]
+    fn write_slicer_files(&mut self, _workbook: &mut Workbook) -> Result<(), XlsxError> {
+        // TODO: Iterate through worksheets and write slicer XML files
+        // let mut index = 1;
+        // for worksheet in &mut workbook.worksheets {
+        //     if let Some(slicers) = &mut worksheet.slicers {
+        //         let filename = format!("xl/slicers/slicer{index}.xml");
+        //         self.zip.start_file(filename, self.zip_options)?;
+        //         slicers.assemble_xml_file();
+        //         self.zip.write_all(slicers.writer.get_ref())?;
+        //         index += 1;
+        //     }
+        // }
+        Ok(())
+    }
+
+    // Write the slicer cache files.
+    #[allow(dead_code)]
+    fn write_slicer_cache_files(&mut self, _workbook: &mut Workbook) -> Result<(), XlsxError> {
+        // TODO: Slicer caches are workbook-level
+        Ok(())
+    }
+
+    // Write the threaded comment files.
+    #[allow(dead_code)]
+    fn write_threaded_comment_files(&mut self, _workbook: &mut Workbook) -> Result<(), XlsxError> {
+        // TODO: Iterate through worksheets and write threaded comment XML files
+        // let mut index = 1;
+        // for worksheet in &mut workbook.worksheets {
+        //     if let Some(threaded_comments) = &mut worksheet.threaded_comments {
+        //         let filename = format!("xl/threadedComments/threadedComment{index}.xml");
+        //         self.zip.start_file(filename, self.zip_options)?;
+        //         threaded_comments.assemble_xml_file();
+        //         self.zip.write_all(threaded_comments.writer.get_ref())?;
+        //         index += 1;
+        //     }
+        // }
+        Ok(())
+    }
+
+    // Write the persons file (workbook-level for threaded comments).
+    #[allow(dead_code)]
+    fn write_persons_file(&mut self, _workbook: &mut Workbook) -> Result<(), XlsxError> {
+        // TODO: Write xl/persons/person.xml for threaded comment authors
+        // if let Some(persons) = &mut workbook.threaded_comment_persons {
+        //     let filename = "xl/persons/person.xml";
+        //     self.zip.start_file(filename, self.zip_options)?;
+        //     persons.assemble_xml_file();
+        //     self.zip.write_all(persons.writer.get_ref())?;
+        // }
+        Ok(())
+    }
+
     // Write the VBA project file.
     fn write_vba_project(&mut self, workbook: &mut Workbook) -> Result<(), XlsxError> {
         if !workbook.is_xlsm_file {
@@ -1130,6 +1236,12 @@ pub(crate) struct PackagerOptions {
     pub(crate) num_embedded_images: u32,
     pub(crate) has_embedded_image_descriptions: bool,
     pub(crate) feature_property_bags: HashSet<FeaturePropertyBagTypes>,
+    pub(crate) num_pivot_tables: u16,
+    pub(crate) num_pivot_caches: u16,
+    pub(crate) num_slicers: u16,
+    pub(crate) num_slicer_caches: u16,
+    pub(crate) num_threaded_comments: u16,
+    pub(crate) has_persons: bool,
 }
 
 impl PackagerOptions {
@@ -1157,6 +1269,12 @@ impl PackagerOptions {
             num_embedded_images: 0,
             has_embedded_image_descriptions: false,
             feature_property_bags: HashSet::new(),
+            num_pivot_tables: 0,
+            num_pivot_caches: 0,
+            num_slicers: 0,
+            num_slicer_caches: 0,
+            num_threaded_comments: 0,
+            has_persons: false,
         }
     }
 }

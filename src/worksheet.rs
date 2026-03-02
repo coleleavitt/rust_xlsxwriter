@@ -1546,6 +1546,9 @@ pub struct Worksheet {
     pub(crate) table_relationships: Vec<(String, String, String)>,
     pub(crate) vml_drawing_relationships: Vec<(String, String, String)>,
     pub(crate) background_relationships: Vec<(String, String, String)>,
+    pub(crate) pivot_table_relationships: Vec<(String, String, String)>,
+    pub(crate) threaded_comment_relationships: Vec<(String, String, String)>,
+    pub(crate) slicer_relationships: Vec<(String, String, String)>,
 
     data_table: BTreeMap<RowNum, BTreeMap<ColNum, CellType>>,
     is_writing_ahead: bool,
@@ -1880,6 +1883,9 @@ impl Worksheet {
             table_relationships: vec![],
             vml_drawing_relationships: vec![],
             background_relationships: vec![],
+            pivot_table_relationships: vec![],
+            threaded_comment_relationships: vec![],
+            slicer_relationships: vec![],
             is_chartsheet: false,
             use_constant_memory: false,
             use_inline_strings: false,
@@ -17133,6 +17139,9 @@ impl Worksheet {
         self.table_relationships.clear();
         self.vml_drawing_relationships.clear();
         self.background_relationships.clear();
+        self.pivot_table_relationships.clear();
+        self.threaded_comment_relationships.clear();
+        self.slicer_relationships.clear();
     }
 
     // Check if any external relationships are required.
@@ -17141,6 +17150,9 @@ impl Worksheet {
             || !self.drawing_object_relationships.is_empty()
             || !self.table_relationships.is_empty()
             || !self.background_relationships.is_empty()
+            || !self.pivot_table_relationships.is_empty()
+            || !self.threaded_comment_relationships.is_empty()
+            || !self.slicer_relationships.is_empty()
     }
 
     // Check if there is a header image.

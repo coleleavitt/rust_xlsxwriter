@@ -324,6 +324,8 @@ mod image;
 mod metadata;
 mod note;
 mod packager;
+mod pivot_cache;
+mod pivot_table;
 mod properties;
 mod protection;
 mod relationship;
@@ -334,9 +336,11 @@ mod rich_value_types;
 mod shape;
 mod shared_strings;
 mod shared_strings_table;
+mod slicer;
 mod styles;
 mod table;
 mod theme;
+mod threaded_comment;
 mod url;
 mod vml;
 mod xmlwriter;
@@ -376,6 +380,12 @@ pub use protection::*;
 pub use shape::*;
 pub use table::*;
 pub use url::*;
+
+// Advanced Excel features (Pivot Tables, Slicers, Threaded Comments)
+pub use pivot_cache::*;
+pub use pivot_table::*;
+pub use slicer::*;
+pub use threaded_comment::*;
 
 #[doc(hidden)]
 pub use chart::*;

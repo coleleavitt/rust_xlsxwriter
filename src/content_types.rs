@@ -173,6 +173,65 @@ impl ContentTypes {
         );
     }
 
+    // Add the name of a pivot table to the ContentTypes overrides.
+    pub(crate) fn add_pivot_table_name(&mut self, index: u16) {
+        let content_type =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
+        let part_name = format!("/xl/pivotTables/pivotTable{index}.xml");
+
+        self.add_override(&part_name, content_type);
+    }
+
+    // Add the name of a pivot cache definition to the ContentTypes overrides.
+    pub(crate) fn add_pivot_cache_definition_name(&mut self, index: u16) {
+        let content_type =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
+        let part_name = format!("/xl/pivotCache/pivotCacheDefinition{index}.xml");
+
+        self.add_override(&part_name, content_type);
+    }
+
+    // Add the name of a pivot cache records to the ContentTypes overrides.
+    pub(crate) fn add_pivot_cache_records_name(&mut self, index: u16) {
+        let content_type =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
+        let part_name = format!("/xl/pivotCache/pivotCacheRecords{index}.xml");
+
+        self.add_override(&part_name, content_type);
+    }
+
+    // Add the name of a slicer cache to the ContentTypes overrides.
+    pub(crate) fn add_slicer_cache_name(&mut self, index: u16) {
+        let content_type = "application/vnd.ms-excel.slicerCache+xml";
+        let part_name = format!("/xl/slicerCaches/slicerCache{index}.xml");
+
+        self.add_override(&part_name, content_type);
+    }
+
+    // Add the name of a slicer to the ContentTypes overrides.
+    pub(crate) fn add_slicer_name(&mut self, index: u16) {
+        let content_type = "application/vnd.ms-excel.slicer+xml";
+        let part_name = format!("/xl/slicers/slicer{index}.xml");
+
+        self.add_override(&part_name, content_type);
+    }
+
+    // Add the threaded comments to the ContentTypes overrides.
+    pub(crate) fn add_threaded_comments_name(&mut self, index: u16) {
+        let content_type = "application/vnd.ms-excel.threadedcomments+xml";
+        let part_name = format!("/xl/threadedComments/threadedComments{index}.xml");
+
+        self.add_override(&part_name, content_type);
+    }
+
+    // Add the persons file to the ContentTypes overrides.
+    pub(crate) fn add_persons(&mut self) {
+        self.add_override(
+            "/xl/persons/person.xml",
+            "application/vnd.ms-excel.person+xml",
+        );
+    }
+
     // -----------------------------------------------------------------------
     // XML assembly methods.
     // -----------------------------------------------------------------------
