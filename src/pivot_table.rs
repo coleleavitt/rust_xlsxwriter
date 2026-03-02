@@ -5,6 +5,7 @@
 // Copyright 2022-2026, John McNamara, jmcnamara@cpan.org
 
 #![warn(missing_docs)]
+#![allow(dead_code)] // Infrastructure for future pivot table API
 
 mod tests;
 

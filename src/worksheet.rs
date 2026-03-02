@@ -1400,7 +1400,8 @@ use crate::{
     ChartRangeCacheDataType, Color, ConditionalFormat, DataValidation, DataValidationErrorStyle,
     DataValidationRuleInternal, DataValidationType, ExcelDateTime, FilterCondition, FilterCriteria,
     FilterData, FilterDataType, HeaderImagePosition, HyperlinkType, Image, IntoExcelDateTime, Note,
-    ObjectMovement, ProtectionOptions, Shape, Sparkline, SparklineType, Table, TableFunction, Url,
+    ObjectMovement, PivotTable, ProtectionOptions, Shape, SlicerCollection, Sparkline,
+    SparklineType, Table, TableFunction, ThreadedComments, Url,
 };
 
 /// Integer type to represent a zero indexed row number. Excel's limit for rows
@@ -1518,6 +1519,12 @@ pub struct Worksheet {
     pub(crate) notes: BTreeMap<RowNum, BTreeMap<ColNum, Note>>,
     pub(crate) shapes: BTreeMap<(RowNum, ColNum, u32, u32), Shape>,
     pub(crate) tables: Vec<Table>,
+    #[allow(dead_code)] // Infrastructure for future pivot table API
+    pub(crate) pivot_tables: Vec<PivotTable>,
+    #[allow(dead_code)] // Infrastructure for future threaded comments API
+    pub(crate) threaded_comments: Option<ThreadedComments>,
+    #[allow(dead_code)] // Infrastructure for future slicer API
+    pub(crate) slicers: Option<SlicerCollection>,
     pub(crate) has_embedded_image_descriptions: bool,
     pub(crate) embedded_images: Vec<Image>,
     pub(crate) global_embedded_image_indices: Vec<u32>,
@@ -1765,6 +1772,9 @@ impl Worksheet {
             merged_ranges: vec![],
             merged_cells: HashMap::new(),
             tables: vec![],
+            pivot_tables: vec![],
+            threaded_comments: None,
+            slicers: None,
             table_ranges: vec![],
             table_cells: HashMap::new(),
             default_format: Format::default(),
