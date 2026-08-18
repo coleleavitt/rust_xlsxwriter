@@ -1267,7 +1267,7 @@ impl Workbook {
     ///
     /// - [`XlsxError::SheetnameReused`] - Worksheet name is already in use in
     ///   the workbook.
-    /// - [`XlsxError::TableNameReused`] - Worksheet Table name is already in
+    /// - [`XlsxError::NameReused`] - A Defined name or Table name is already in
     ///   use in the workbook.
     /// - [`XlsxError::ChartError`] - A Chartsheet doesn't contain a chart.
     /// - [`XlsxError::IoError`] - A wrapper for various IO errors when creating
@@ -1489,7 +1489,7 @@ impl Workbook {
     /// # Errors
     ///
     /// - [`XlsxError::NameError`] - The name doesn't meet one of Excel's
-    ///   criteria for defined names. See [`XlsxError::NameError`] for details.
+    ///   criteria for defined names.
     ///
     /// # Examples
     ///
@@ -2569,7 +2569,10 @@ impl Workbook {
         self.prepare_format_properties();
 
         // Prepare worksheet tables.
-        self.prepare_tables()?;
+        self.prepare_tables();
+
+        // Check the table and defined names for duplicates.
+        self.prepare_names()?;
 
         // Update the shared string table in each worksheet.
         for worksheet in &mut self.worksheets {
@@ -2734,9 +2737,8 @@ impl Workbook {
     }
 
     // Prepare and check each table in the workbook.
-    fn prepare_tables(&mut self) -> Result<(), XlsxError> {
+    fn prepare_tables(&mut self) {
         let mut table_id = 1;
-        let mut seen_table_names = HashSet::new();
 
         // Set a unique table id and table name and also set the .rel file
         // linkages.
@@ -2745,15 +2747,35 @@ impl Workbook {
                 table_id = worksheet.prepare_worksheet_tables(table_id);
             }
         }
+    }
 
-        // Check for duplicate table names.
+    // Check the Table and Defined names in the workbook for duplicates. Defined
+    // and Table names must be unique to themselves and also to each other.
+    fn prepare_names(&mut self) -> Result<(), XlsxError> {
+        let mut seen_names = HashSet::new();
+
+        // Check the user defined names for duplicates.
+        for defined_name in &self.user_defined_names {
+            let seen_name = match defined_name.name_type {
+                DefinedNameType::Global => defined_name.name.to_lowercase(),
+                DefinedNameType::Local => {
+                    let sheet_name = utility::unquote_sheetname(&defined_name.quoted_sheet_name);
+                    format!("{}!{}", sheet_name, defined_name.name).to_lowercase()
+                }
+                _ => continue,
+            };
+
+            if !seen_names.insert(seen_name) {
+                return Err(XlsxError::NameReused(defined_name.name.clone()));
+            }
+        }
+
+        // Check for table names for duplicates.
         for worksheet in &self.worksheets {
             for table in &worksheet.tables {
-                if seen_table_names.contains(&table.name.to_lowercase()) {
-                    return Err(XlsxError::TableNameReused(table.name.clone()));
+                if !seen_names.insert(table.name.to_lowercase()) {
+                    return Err(XlsxError::NameReused(table.name.clone()));
                 }
-
-                seen_table_names.insert(table.name.to_lowercase());
             }
         }
 
