@@ -928,6 +928,69 @@ pub(crate) fn is_valid_range(range: &str) -> bool {
     true
 }
 
+// Check if a name looks like an Excel A1 or R1C1 style cell reference and thus
+// can't be used as a defined name or table name. The rules are a subset of the
+// cell reference rules in `quote_sheet_name()` above.
+pub(crate) fn is_cell_reference(name: &str) -> bool {
+    let col_max = u64::from(COL_MAX);
+    let row_max = u64::from(ROW_MAX);
+
+    // Normalize to uppercase and strip any "$" anchors like "Z$100". "$" is
+    // generally invalid in a name anyway and is checked elsewhere.
+    let name = name.replace('$', "").to_uppercase();
+
+    // Split names that look like A1 and R1C1 style cell references into a
+    // leading string and a trailing number.
+    let (string_part, number_part) = split_cell_reference(&name);
+
+    // The number part of the name can have trailing non-digit characters and
+    // still be a valid R1C1 match. However, to test the R1C1 row/col part we
+    // need to extract just the number part.
+    let mut number_parts = number_part.split(|c: char| !c.is_ascii_digit());
+    let rc_number_part = number_parts.next().unwrap_or_default();
+
+    // Check for a valid A1 style cell reference.
+    if (1..=3).contains(&string_part.len()) && number_part.chars().all(|c| c.is_ascii_digit()) {
+        let col = column_name_to_number(&string_part);
+        let col = u64::from(col + 1);
+
+        let row = number_part.parse::<u64>().unwrap_or_default();
+
+        if row > 0 && row <= row_max && col <= col_max {
+            return true;
+        }
+    }
+
+    // Check for names that start with a valid R1 style cell reference. Other
+    // characters after the valid RC reference are ignored by Excel.
+    //
+    // Note: references without trailing characters like R12345 or C12345 are
+    // caught by the A1 check above.
+    if string_part == "R" {
+        let row = rc_number_part.parse::<u64>().unwrap_or_default();
+
+        if row > 0 && row <= row_max {
+            return true;
+        }
+    }
+
+    // Check for names that start with a valid C1 or RC1 style cell reference.
+    if string_part == "RC" || string_part == "C" {
+        let col = rc_number_part.parse::<u64>().unwrap_or_default();
+
+        if col > 0 && col <= col_max {
+            return true;
+        }
+    }
+
+    // Check for single R/C references.
+    if name == "R" || name == "C" || name == "RC" {
+        return true;
+    }
+
+    false
+}
+
 /// Check that a worksheet name is valid in Excel.
 ///
 /// This function checks if an worksheet name is valid according to the Excel
@@ -1015,6 +1078,107 @@ pub(crate) fn validate_sheetname(name: &str, message: &str) -> Result<(), XlsxEr
     if name.starts_with('\'') || name.ends_with('\'') {
         return Err(XlsxError::SheetnameStartsOrEndsWithApostrophe(
             message.to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Check that a defined name or table name meets Excel's naming rules.
+///
+/// This function checks a name according to the following Excel rules for
+/// Table names and Defined names:
+///
+/// - The name cannot be blank.
+/// - The name cannot contain non-word characters apart from period `.`,
+///   underscore `_` and backslash `\`. Word characters include Unicode
+///   letters and digits.
+/// - The first character must be a letter, an underscore character `_`, or
+///   a backslash `\`.
+/// - The name cannot contain spaces.
+/// - The name cannot exceed 255 characters.
+/// - The name cannot be the same as a cell reference like `A1`, `Z100` or
+///   `R1C1`, or any lowercase variant.
+/// - The name cannot match Excel's internally reserved names.
+///
+/// # Parameters
+///
+/// - `name`: The name to check.
+///
+/// # Errors
+///
+/// - [`XlsxError::NameError`] - The name doesn't meet one of Excel's criteria
+///   for Table names or Defined names, as outlined above.
+///
+/// # Examples:
+///
+/// ```
+/// use rust_xlsxwriter::utility::check_name;
+///
+/// assert!(check_name("Sales").is_ok());
+/// assert!(check_name("Table1").is_ok());
+///
+/// assert!(check_name("Has space").is_err());
+/// assert!(check_name("A1").is_err());
+/// ```
+///
+pub fn check_name(name: &str) -> Result<(), XlsxError> {
+    // Check that the name isn't blank.
+    if name.is_empty() {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name cannot be blank".to_string(),
+        ));
+    }
+
+    // Check that the name doesn't exceed 255 characters, an Excel limit.
+    if name.chars().count() > 255 {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name exceeds Excel limit of 255 characters".to_string(),
+        ));
+    }
+
+    // Check for non-word characters, apart from '.', '_' and '\'.
+    if !name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '.' || c == '_' || c == '\\')
+    {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name contains a non-word character".to_string(),
+        ));
+    }
+
+    // Check that the name starts with a letter, underscore or backslash.
+    let first_char = name.chars().next().unwrap();
+    if !(first_char.is_alphabetic() || first_char == '_' || first_char == '\\') {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name must start with a letter, underscore or backslash character".to_string(),
+        ));
+    }
+
+    // Check that the name isn't an Excel cell reference.
+    if is_cell_reference(name) {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name cannot be an Excel cell reference like 'A1' or 'R1C1'".to_string(),
+        ));
+    }
+
+    // Check that the name doesn't match one of Excel's internally reserved
+    // names.
+    if [
+        "_xlnm.Print_Area",
+        "_xlnm._FilterDatabase",
+        "_xlnm.Print_Titles",
+    ]
+    .contains(&name)
+    {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name cannot match Excel's internally reserved names".to_string(),
         ));
     }
 

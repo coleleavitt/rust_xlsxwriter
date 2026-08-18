@@ -284,7 +284,95 @@ mod utility_tests {
         ];
 
         for (sheetname, exp) in tests {
-            assert_eq!(exp, utility::quote_sheet_name(sheetname));
+            assert_eq!(
+                exp,
+                utility::quote_sheet_name(sheetname),
+                "for name '{sheetname}'"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_cell_reference() {
+        let tests = vec![
+            // Valid names that aren't cell references.
+            ("Sales", false),
+            ("Table1", false),
+            // Outside the Excel column range.
+            ("AAAA1", false),
+            // Outside the Excel row range.
+            ("A1048577", false),
+            // A1 style cell references.
+            ("A1", true),
+            ("a1", true),
+            ("A01", true),
+            ("XFD1048576", true),
+            // R1C1 style cell references, including trailing characters which
+            // are ignored by Excel.
+            ("R", true),
+            ("C", true),
+            ("RC", true),
+            ("r1c1", true),
+            ("R1C1", true),
+            ("R1C1x", true),
+            // Absolute/anchored cell references.
+            ("$A$1", true),
+            ("A$1", true),
+            ("Z$100", true),
+        ];
+
+        for (name, exp) in tests {
+            assert_eq!(exp, utility::is_cell_reference(name), "for name '{name}'");
+        }
+    }
+
+    #[test]
+    fn test_check_name() {
+        let name_255 = "a".repeat(255);
+        let name_256 = "a".repeat(256);
+
+        let tests = vec![
+            // Valid names.
+            ("Sales", true),
+            ("Table1", true),
+            ("_name", true),
+            ("\\name", true),
+            ("My.Name", true),
+            ("été", true),
+            ("日本語", true),
+            // Outside the Excel cell reference row/column ranges.
+            ("AAAA1", true),
+            ("A1048577", true),
+            // At the 255 character limit.
+            (name_255.as_str(), true),
+            // Blank name.
+            ("", false),
+            // Exceeds the 255 character limit.
+            (name_256.as_str(), false),
+            // Invalid first characters.
+            ("1name", false),
+            (".name", false),
+            // Non-word characters.
+            ("name space", false),
+            ("name$", false),
+            ("name!", false),
+            ("name,", false),
+            ("name-", false),
+            // Cell references.
+            ("A1", false),
+            ("a1", false),
+            ("Z100", false),
+            ("XFD1048576", false),
+            ("R1C1", false),
+            ("r1c1", false),
+            // Excel's internally reserved names.
+            ("_xlnm.Print_Area", false),
+            ("_xlnm._FilterDatabase", false),
+            ("_xlnm.Print_Titles", false),
+        ];
+
+        for (name, exp) in tests {
+            assert_eq!(exp, utility::check_name(name).is_ok(), "for name '{name}'");
         }
     }
 
