@@ -46,7 +46,7 @@ pub enum SlicerCrossFilter {
 
 impl SlicerCrossFilter {
     /// Convert to XML crossFilter attribute value.
-    pub(crate) fn to_cross_filter_str(&self) -> &'static str {
+    pub(crate) fn to_cross_filter_str(self) -> &'static str {
         match self {
             SlicerCrossFilter::None => "none",
             SlicerCrossFilter::ShowItemsWithDataAtTop => "showItemsWithDataAtTop",
@@ -68,7 +68,7 @@ pub enum SlicerSortOrder {
 
 impl SlicerSortOrder {
     /// Convert to XML sortOrder attribute value.
-    pub(crate) fn to_sort_order_str(&self) -> &'static str {
+    pub(crate) fn to_sort_order_str(self) -> &'static str {
         match self {
             SlicerSortOrder::Ascending => "ascending",
             SlicerSortOrder::Descending => "descending",
@@ -122,7 +122,7 @@ pub enum SlicerStyle {
 
 impl SlicerStyle {
     /// Convert to XML style name.
-    pub(crate) fn to_style_str(&self) -> &'static str {
+    pub(crate) fn to_style_str(self) -> &'static str {
         match self {
             SlicerStyle::SlicerStyleLight1 => "SlicerStyleLight1",
             SlicerStyle::SlicerStyleLight2 => "SlicerStyleLight2",

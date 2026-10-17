@@ -43,7 +43,7 @@ pub enum PivotFieldAxis {
 
 impl PivotFieldAxis {
     /// Convert to XML axis attribute value.
-    pub(crate) fn to_axis_str(&self) -> Option<&'static str> {
+    pub(crate) fn to_axis_str(self) -> Option<&'static str> {
         match self {
             PivotFieldAxis::None => None,
             PivotFieldAxis::Row => Some("axisRow"),
@@ -94,7 +94,7 @@ pub enum DataFieldFunction {
 
 impl DataFieldFunction {
     /// Convert to XML subtotal attribute value.
-    pub(crate) fn to_subtotal_str(&self) -> &'static str {
+    pub(crate) fn to_subtotal_str(self) -> &'static str {
         match self {
             DataFieldFunction::Sum => "sum",
             DataFieldFunction::Count => "count",
@@ -160,7 +160,7 @@ pub enum ShowDataAs {
 
 impl ShowDataAs {
     /// Convert to XML showDataAs attribute value.
-    pub(crate) fn to_show_data_as_str(&self) -> Option<&'static str> {
+    pub(crate) fn to_show_data_as_str(self) -> Option<&'static str> {
         match self {
             ShowDataAs::Normal => None,
             ShowDataAs::Difference => Some("difference"),

@@ -8,7 +8,7 @@
 mod pivot_cache_tests {
     use crate::pivot_cache::{
         PivotCacheDefinition, PivotCacheField, PivotCacheRecord, PivotCacheRecordValue,
-        PivotCacheRecords, PivotCacheSourceType, PivotCacheValue,
+        PivotCacheRecords, PivotCacheSourceType,
     };
 
     #[test]

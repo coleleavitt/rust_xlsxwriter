@@ -40,7 +40,7 @@ pub enum IdentityProvider {
 
 impl IdentityProvider {
     /// Get the provider ID string for XML serialization.
-    pub(crate) fn to_provider_id(&self) -> &'static str {
+    pub(crate) fn to_provider_id(self) -> &'static str {
         match self {
             IdentityProvider::None => "None",
             IdentityProvider::ActiveDirectory => "AD",
@@ -154,7 +154,7 @@ impl ThreadedCommentPerson {
             ((secs >> 16) & 0xFFFF) as u16,
             ((secs & 0xFFFF) | 0x4000) as u16,        // Version 4
             ((count >> 48) & 0x3FFF | 0x8000) as u16, // Variant
-            (count & 0xFFFFFFFFFFFF) as u64
+            count & 0xFFFFFFFFFFFF
         )
     }
 }

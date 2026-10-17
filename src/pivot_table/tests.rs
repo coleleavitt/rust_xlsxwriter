@@ -7,7 +7,7 @@
 #[cfg(test)]
 mod pivot_table_tests {
     use crate::pivot_table::{
-        DataFieldFunction, DateGroupBy, PivotDataField, PivotField, PivotFieldAxis, PivotFieldItem,
+        DataFieldFunction, PivotDataField, PivotField, PivotFieldAxis, PivotFieldItem,
         PivotTable, ShowDataAs,
     };
 

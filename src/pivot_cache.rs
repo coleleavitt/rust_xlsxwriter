@@ -33,7 +33,7 @@ pub enum PivotCacheSourceType {
 
 impl PivotCacheSourceType {
     /// Convert to XML type attribute value.
-    pub(crate) fn to_type_str(&self) -> &'static str {
+    pub(crate) fn to_type_str(self) -> &'static str {
         match self {
             PivotCacheSourceType::Worksheet => "worksheet",
             PivotCacheSourceType::External => "external",
