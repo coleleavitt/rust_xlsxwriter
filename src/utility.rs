@@ -65,10 +65,10 @@ use crate::XlsxError;
 pub fn column_number_to_name(col_num: ColNum) -> String {
     let mut col_name = String::new();
 
-    let mut col_num = col_num + 1;
+    let mut col_num = u32::from(col_num + 1);
 
     while col_num > 0 {
-        // Set remainder from 1 .. 26
+        // Set remainder from 1 .. 26.
         let mut remainder = col_num % 26;
 
         if remainder == 0 {
@@ -76,7 +76,7 @@ pub fn column_number_to_name(col_num: ColNum) -> String {
         }
 
         // Convert the remainder to a character.
-        let col_letter = char::from_u32(64u32 + u32::from(remainder)).unwrap();
+        let col_letter = char::from_u32(64 + remainder).unwrap();
 
         // Accumulate the column letters, right to left.
         col_name = format!("{col_letter}{col_name}");
@@ -678,6 +678,8 @@ pub(crate) fn chart_error_range(
 /// change in a formula as `=Sheet1!A1`, whereas `Sheet 1` would be represented
 /// as `='Sheet 1'!A1`.
 ///
+/// Named that don't need to be quoted are returned cloned but unchanged.
+///
 /// # Parameters
 ///
 /// - `sheetname`: The worksheet name to quote.
@@ -689,7 +691,7 @@ pub(crate) fn chart_error_range(
 /// ```
 /// use rust_xlsxwriter::utility::quote_sheet_name;
 ///
-/// // Doesn't need to be quoted.
+/// // Doesn't need to be quoted: unchanged.
 /// let result = quote_sheet_name("Sheet1");
 /// assert_eq!(result, "Sheet1");
 ///
@@ -729,6 +731,9 @@ pub fn quote_sheet_name(sheetname: &str) -> String {
     // leading string and a trailing number.
     let (string_part, number_part) = split_cell_reference(&sheetname);
 
+    // Check for potential column name characters before the first digit.
+    let column_part_is_ascii = column_part_is_ascii(&sheetname);
+
     // The number part of the sheet name can have trailing non-digit characters
     // and still be a valid R1C1 match. However, to test the R1C1 row/col part
     // we need to extract just the number part.
@@ -756,10 +761,12 @@ pub fn quote_sheet_name(sheetname: &str) -> String {
         }
         // --------------------------------------------------------------------
         // Rule 3. Sheet names must not be a valid A1 style cell reference.
-        // Valid means that the row and column range values must also be within
-        // Excel row and column limits.
+        // Valid means that the string part must be ASCII/column letters and the
+        // row and column range values must also be within Excel row and column
+        // limits.
         // --------------------------------------------------------------------
-        else if (1..=3).contains(&string_part.len())
+        else if column_part_is_ascii
+            && (1..=3).contains(&string_part.len())
             && number_part.chars().all(|c| c.is_ascii_digit())
         {
             let col = column_name_to_number(&string_part);
@@ -829,10 +836,47 @@ pub(crate) fn unquote_sheetname(sheetname: &str) -> String {
     }
 }
 
+// Split a local defined name like "Sheet1!Name" or "'Sheet 1'!Name" into its
+// sheet name and defined name parts.
+pub(crate) fn split_local_name(name: &str) -> Option<(&str, &str)> {
+    // Handle simple unquoted names like "Sheet1!Name".
+    if !name.starts_with('\'') {
+        return name
+            .find('!')
+            .map(|position| (&name[..position], &name[position + 1..]));
+    }
+
+    // Handle quoted sheet names like "'Sheet 1'!Name" by finding the closing
+    // quote, skipping any escaped/doubled quotes.
+    let mut chars = name.char_indices().skip(1).peekable();
+    while let Some((index, char)) = chars.next() {
+        if char == '\'' {
+            // Peek ahead for another quote or the "!" delimiter.
+            match chars.peek() {
+                // An escaped quote within the sheet name.
+                Some((_, '\'')) => {
+                    chars.next();
+                }
+
+                // The closing quote followed by the "!" delimiter.
+                Some((next_index, '!')) => {
+                    return Some((&name[..=index], &name[next_index + 1..]));
+                }
+
+                // Reject a closing quote without a "!" delimiter.
+                _ => return None,
+            }
+        }
+    }
+
+    // Reject a quoted sheet name without a closing quote.
+    None
+}
+
 // Match emoji characters when quoting sheetnames. The following were generated from:
 // https://util.unicode.org/UnicodeJsps/list-unicodeset.jsp?a=%5B%3AEmoji%3DYes%3A%5D&abb=on&esc=on&g=&i=
 //
-pub(crate) fn is_emoji(c: char) -> bool {
+fn is_emoji(c: char) -> bool {
     if c < '\u{203C}' {
         // Shortcut for most chars in the lower range. We ignore '#', '*',
         // '0-9', '©️' and '®️' which are in this range and which are, strictly
@@ -889,6 +933,16 @@ pub(crate) fn is_emoji(c: char) -> bool {
     )
 }
 
+// Check that the characters in a name (before the first digit) are ASCII letters,
+// i.e., possible column name characters. This check is done on the original
+// string to avoid false positives like "ß", which uppercases to "SS".
+fn column_part_is_ascii(name: &str) -> bool {
+    match name.find(|c: char| c.is_ascii_digit()) {
+        Some(position) => name[..position].chars().all(|c| c.is_ascii_alphabetic()),
+        None => false,
+    }
+}
+
 // Split sheetnames that look like A1 and R1C1 style cell references into a
 // leading string and a trailing number.
 pub(crate) fn split_cell_reference(sheetname: &str) -> (String, String) {
@@ -924,6 +978,70 @@ pub(crate) fn is_valid_range(range: &str) -> bool {
     }
 
     true
+}
+
+// Check if a name looks like an Excel A1 or R1C1 style cell reference and thus
+// can't be used as a defined name or table name. The rules are a subset of the
+// cell reference rules in `quote_sheet_name()` above.
+fn is_cell_reference(name: &str) -> bool {
+    let col_max = u64::from(COL_MAX);
+    let row_max = u64::from(ROW_MAX);
+
+    // Check for potential column name characters before the first digit.
+    let column_part_is_ascii = column_part_is_ascii(name);
+
+    // Normalize to uppercase since the Excel check is case-insensitive.
+    let name = name.to_uppercase();
+
+    // Split names that look like A1 and R1C1 style cell references into a
+    // leading string and a trailing number.
+    let (string_part, number_part) = split_cell_reference(&name);
+
+    // The number part of the name can have trailing non-digit characters and
+    // still be a valid R1C1 match. However, to test the R1C1 row/col part we
+    // need to extract just the number part.
+    let mut number_parts = number_part.split(|c: char| !c.is_ascii_digit());
+    let rc_number_part = number_parts.next().unwrap_or_default();
+
+    // Check for a valid A1 style cell reference.
+    if column_part_is_ascii
+        && (1..=3).contains(&string_part.len())
+        && number_part.chars().all(|c| c.is_ascii_digit())
+    {
+        let col = column_name_to_number(&string_part);
+        let col = u64::from(col + 1);
+
+        let row = number_part.parse::<u64>().unwrap_or_default();
+
+        if row > 0 && row <= row_max && col <= col_max {
+            return true;
+        }
+    }
+
+    // Check for names that start with a valid R1 style cell reference. Other
+    // characters after the valid RC reference are ignored by Excel.
+    //
+    // Note: references without trailing characters like R12345 or C12345 are
+    // caught by the A1 check above.
+    if string_part == "R" {
+        let row = rc_number_part.parse::<u64>().unwrap_or_default();
+
+        if row > 0 && row <= row_max {
+            return true;
+        }
+    }
+
+    // Check for names that start with a valid C1 or RC1 style cell reference.
+    if string_part == "RC" || string_part == "C" {
+        let col = rc_number_part.parse::<u64>().unwrap_or_default();
+
+        if col > 0 && col <= col_max {
+            return true;
+        }
+    }
+
+    // Finally, check for single R/C references.
+    name == "R" || name == "C" || name == "RC"
 }
 
 /// Check that a worksheet name is valid in Excel.
@@ -1013,6 +1131,139 @@ pub(crate) fn validate_sheetname(name: &str, message: &str) -> Result<(), XlsxEr
     if name.starts_with('\'') || name.ends_with('\'') {
         return Err(XlsxError::SheetnameStartsOrEndsWithApostrophe(
             message.to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Check that a defined name or table name meets Excel's naming rules.
+///
+/// This function checks a name according to the following Excel rules for Table
+/// names and Defined names:
+///
+/// - The name cannot be blank.
+/// - The name should not contain non-word characters apart from period `.`,
+///   underscore `_` and backslash `\`. Word characters include Unicode letters
+///   and digits.
+/// - The first character must be a letter, an underscore character `_`, or a
+///   backslash `\`.
+/// - The name cannot contain spaces.
+/// - The name cannot exceed 255 characters.
+/// - The name cannot be the same as a cell reference like `A1`, `Z100` or
+///   `R1C1`, or any lowercase variant.
+/// - The name cannot match Excel's internally reserved names.
+///
+/// Note, this function doesn't disallow all the names that Excel disallows. In
+/// particular there are a large number of Unicode symbols that Excel disallows
+/// in names. It is best to keep the names to characters and non-leading digits
+/// with underscores and periods for any separating characters. If in doubt test
+/// the name in Excel.
+///
+/// # Parameters
+///
+/// - `name`: The name to check.
+///
+/// # Errors
+///
+/// - [`XlsxError::NameError`] - The name doesn't meet one of Excel's criteria
+///   for Table names or Defined names, as outlined above.
+///
+/// # Examples:
+///
+/// ```
+/// use rust_xlsxwriter::utility::check_name;
+///
+/// assert!(check_name("Sales").is_ok());
+/// assert!(check_name("Table1").is_ok());
+///
+/// assert!(check_name("Has space").is_err());
+/// assert!(check_name("A1").is_err());
+/// ```
+///
+pub fn check_name(name: &str) -> Result<(), XlsxError> {
+    // Check that the name isn't blank.
+    if name.is_empty() {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name cannot be blank".to_string(),
+        ));
+    }
+
+    // Check that the name doesn't exceed 255 characters, an Excel limit.
+    if name.chars().count() > 255 {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name exceeds Excel limit of 255 characters".to_string(),
+        ));
+    }
+
+    // Check for characters that Excel doesn't allow in names.
+    let invalid_chars = [
+        ' ', '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '/', ':', ';', '<',
+        '=', '>', '@', '[', ']', '^', '`', '{', '|', '}', '~',
+    ];
+    if let Some(invalid_char) = name
+        .chars()
+        .find(|c| invalid_chars.contains(c) || c.is_control())
+    {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            format!("Name contains a character that isn't allowed by Excel: {invalid_char:?}"),
+        ));
+    }
+
+    // Check that the name doesn't start with a character that Excel doesn't
+    // allow in the first position.
+    let first_char = name.chars().next().unwrap();
+    if first_char.is_ascii_digit() || matches!(first_char, '.' | '?') {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            format!("Name starts with a character that isn't allowed by Excel: {first_char:?}"),
+        ));
+    }
+
+    // Check for a name that is a backslash followed by a single letter,
+    // like "\a". Maybe to avoid Lotus 1-2-3 macro names.
+    if name.chars().count() == 2
+        && name.starts_with('\\')
+        && name.ends_with(|c: char| c.is_ascii_alphanumeric())
+    {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name cannot be a backslash followed by a single letter".to_string(),
+        ));
+    }
+
+    // Check that the name isn't one of Excel's logical constants.
+    let uppercase_name = name.to_uppercase();
+    if uppercase_name == "TRUE" || uppercase_name == "FALSE" {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name cannot be one of Excel's logical constants 'TRUE' or 'FALSE'".to_string(),
+        ));
+    }
+
+    // Check that the name isn't an Excel cell reference.
+    if is_cell_reference(name) {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name cannot be an Excel cell reference like 'A1' or 'R1C1'".to_string(),
+        ));
+    }
+
+    // Check that the name doesn't match one of Excel's internally reserved
+    // names. The check is case insensitive.
+    if [
+        "_XLNM.PRINT_AREA",
+        "_XLNM._FILTERDATABASE",
+        "_XLNM.PRINT_TITLES",
+    ]
+    .contains(&uppercase_name.as_str())
+    {
+        return Err(XlsxError::NameError(
+            name.to_string(),
+            "Name cannot match Excel's internally reserved names".to_string(),
         ));
     }
 

@@ -99,6 +99,12 @@
 //!
 //! <p>
 //!
+//! - [`Utility`](crate::utility): A module of utility/helper functions for working with Excel files.
+//!
+//! </p>
+//!
+//! <p>
+//!
 //! - [`Working with Serde`](serializer/index.html): Serializing data structures
 //!   to Excel worksheets using Serde.
 //! </p>
@@ -236,21 +242,10 @@
 //! As mentioned above the `rust_xlsxwriter` library has sister libraries
 //! written natively in C, Python, and Perl.
 //!
-//! A relative performance comparison between the C, Rust, and Python versions
-//! is shown below. The Perl performance is similar to the Python library, so it
-//! has been omitted.
+//! A relative performance comparison between the C, Rust, and Python versions is:
 //!
-//! | Library                       | Relative to C | Relative to Rust |
-//! |-------------------------------|---------------|------------------|
-//! | C/libxlsxwriter               | 1.00          |                  |
-//! | `rust_xlsxwriter`             | 1.14          | 1.00             |
-//! | Python/XlsxWriter             | 4.36          | 3.81             |
-//!
-//! <br>
-//!
-//! The C version is the fastest: it is 1.14 times faster than the Rust version
-//! and 4.36 times faster than the Python version. The Rust version is 3.81
-//! times faster than the Python version.
+//! - `rust_xlsxwriter` is 1.6x faster than C/libxlsxwriter.
+//! - `rust_xlsxwriter` is 6.5x faster than Python/XlsxWriter.
 //!
 //! See the [Performance] section for more details.
 //!
@@ -281,8 +276,6 @@
 //!   [`IntoExcelDateTime`].
 //! - `jiff`: Adds support for Jiff date/time types to the API. See
 //!   [`IntoExcelDateTime`].
-//! - `zlib`: Improves performance of the `zlib` crate but adds a dependency on
-//!   zlib and a C compiler. This can be up to 1.5 times faster for large files.
 //! - `polars`: Adds support for mapping between `PolarsError` and
 //!   `rust_xlsxwriter::XlsxError` to make code that handles both types of
 //!   errors easier to write. See also
@@ -293,10 +286,8 @@
 //! - `rust_decimal`: Adds support for writing the
 //!   [`rust_decimal`](https://crates.io/crates/rust_decimal) `Decimal` type
 //!   with `Worksheet::write()`, provided it can be represented by [`f64`].
-//! - `ryu`: Adds a dependency on `ryu`. This speeds up writing numeric
-//!   worksheet cells for large data files. It gives a performance boost for
-//!   more than 300,000 numeric cells and can be up to 30% faster than the
-//!   default number formatting for 5,000,000 numeric cells.
+//! - `zmij`: Adds a dependency on `zmij`. This speeds up writing numeric
+//!   worksheet cells by about 10%.
 //!
 //! A `rust_xlsxwriter` feature can be enabled in your `Cargo.toml` file as
 //! follows:

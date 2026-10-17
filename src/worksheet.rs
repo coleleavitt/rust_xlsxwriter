@@ -1361,9 +1361,6 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::{cmp, fmt};
 
 #[cfg(feature = "constant_memory")]
-use tempfile::tempfile_in;
-
-#[cfg(feature = "constant_memory")]
 use std::io::BufWriter;
 
 #[cfg(feature = "constant_memory")]
@@ -1588,6 +1585,7 @@ pub struct Worksheet {
     center_horizontally: bool,
     center_vertically: bool,
     screen_gridlines: bool,
+    hidden_zeroes: bool,
     print_gridlines: bool,
     print_black_and_white: bool,
     print_draft: bool,
@@ -1651,7 +1649,7 @@ pub struct Worksheet {
     max_autofit_row: RowNum,
 
     #[cfg(feature = "constant_memory")]
-    pub(crate) file_writer: BufWriter<File>,
+    pub(crate) file_writer: Option<BufWriter<File>>,
 
     #[cfg(feature = "constant_memory")]
     write_ahead: BTreeMap<RowNum, BTreeMap<ColNum, CellType>>,
@@ -1748,9 +1746,6 @@ impl Worksheet {
             top_cell: (0, 0),
         };
 
-        #[cfg(feature = "constant_memory")]
-        let file_writer = BufWriter::new(tempfile_in(std::env::temp_dir()).unwrap());
-
         Worksheet {
             writer,
             name: String::new(),
@@ -1803,6 +1798,7 @@ impl Worksheet {
             center_horizontally: false,
             center_vertically: false,
             screen_gridlines: true,
+            hidden_zeroes: false,
             print_gridlines: false,
             print_black_and_white: false,
             print_draft: false,
@@ -1907,7 +1903,7 @@ impl Worksheet {
             has_workbook_global_sst: false,
 
             #[cfg(feature = "constant_memory")]
-            file_writer,
+            file_writer: None,
 
             #[cfg(feature = "constant_memory")]
             write_ahead: BTreeMap::new(),
@@ -2363,10 +2359,8 @@ impl Worksheet {
         I: IntoIterator,
         I::Item: IntoExcelData,
     {
-        let mut col = col;
-        for item in data {
+        for (col, item) in (col..).zip(data) {
             self.write(row, col, item)?;
-            col += 1;
         }
 
         Ok(self)
@@ -2407,10 +2401,8 @@ impl Worksheet {
         I: IntoIterator,
         I::Item: IntoExcelData,
     {
-        let mut col = col;
-        for item in data {
+        for (col, item) in (col..).zip(data) {
             self.write_with_format(row, col, item, format)?;
-            col += 1;
         }
 
         Ok(self)
@@ -2487,10 +2479,8 @@ impl Worksheet {
         I: IntoIterator,
         I::Item: IntoExcelData,
     {
-        let mut row = row;
-        for item in data {
+        for (row, item) in (row..).zip(data) {
             self.write(row, col, item)?;
-            row += 1;
         }
 
         Ok(self)
@@ -2531,10 +2521,8 @@ impl Worksheet {
         I: IntoIterator,
         I::Item: IntoExcelData,
     {
-        let mut row = row;
-        for item in data {
+        for (row, item) in (row..).zip(data) {
             self.write_with_format(row, col, item, format)?;
-            row += 1;
         }
 
         Ok(self)
@@ -2616,10 +2604,8 @@ impl Worksheet {
         I::Item: IntoIterator<Item = II>,
         II: IntoExcelData,
     {
-        let mut row = row;
-        for item in data {
+        for (row, item) in (row..).zip(data) {
             self.write_row(row, col, item)?;
-            row += 1;
         }
 
         Ok(self)
@@ -2701,10 +2687,8 @@ impl Worksheet {
         I::Item: IntoIterator<Item = II>,
         II: IntoExcelData,
     {
-        let mut col = col;
-        for item in data {
+        for (col, item) in (col..).zip(data) {
             self.write_column(row, col, item)?;
-            col += 1;
         }
 
         Ok(self)
@@ -8020,20 +8004,7 @@ impl Worksheet {
         col: ColNum,
         width: impl Into<f64>,
     ) -> Result<&mut Worksheet, XlsxError> {
-        let width = width.into();
-        let width_pixels;
-
-        // Convert from Excel character width to pixels. The algorithm for the
-        // conversion is different below 1 character width.
-        if width == 0.0 {
-            width_pixels = 0;
-        } else if width < 1.0 {
-            width_pixels =
-                (width * f64::from(self.max_digit_width + self.cell_padding)).round() as u32;
-        } else {
-            width_pixels =
-                (width * f64::from(self.max_digit_width)).round() as u32 + self.cell_padding;
-        }
+        let width_pixels = self.column_width_to_pixels(width.into());
 
         self.set_column_width_internal(col, width_pixels, false)
     }
@@ -8283,22 +8254,8 @@ impl Worksheet {
             return Err(XlsxError::RowColumnLimitError);
         }
 
-        // Update an existing col metadata object or create a new one.
-        match self.changed_cols.get_mut(&col) {
-            Some(col_options) => col_options.hidden = true,
-            None => {
-                let col_options = ColOptions {
-                    width: self.default_col_width,
-                    xf_index: 0,
-                    hidden: true,
-                    level: 0,
-                    collapsed: false,
-                    autofit: false,
-                    format: None,
-                };
-                self.changed_cols.insert(col, col_options);
-            }
-        }
+        // Store the column hidden property.
+        self.store_column_hidden(col);
 
         Ok(self)
     }
@@ -8333,12 +8290,10 @@ impl Worksheet {
             return Err(XlsxError::RowColumnOrderError);
         }
 
-        let width = width.into();
-        for col_num in first_col..=last_col {
-            self.set_column_width(col_num, width)?;
-        }
+        // Convert the width once for the whole range.
+        let width_pixels = self.column_width_to_pixels(width.into());
 
-        Ok(self)
+        self.set_column_range_width_pixels(first_col, last_col, width_pixels)
     }
 
     /// Set the pixel width for a range of columns.
@@ -8371,8 +8326,22 @@ impl Worksheet {
             return Err(XlsxError::RowColumnOrderError);
         }
 
+        // If the width is 0 then the Excel treats the columns as hidden with
+        // default width.
+        if width == 0 {
+            return self.set_column_range_hidden(first_col, last_col);
+        }
+
+        // Check the column range is in the allowed range without updating
+        // dimensions. The first column is always valid if the last column is
+        // valid.
+        if !self.check_dimensions_only(0, last_col) {
+            return Err(XlsxError::RowColumnLimitError);
+        }
+
+        // Store the column width for each column in the range.
         for col_num in first_col..=last_col {
-            self.set_column_width_pixels(col_num, width)?;
+            self.store_column_width(col_num, width, false);
         }
 
         Ok(self)
@@ -8454,8 +8423,37 @@ impl Worksheet {
             return Err(XlsxError::RowColumnOrderError);
         }
 
+        // Get a suitable minimum value for the dimension check/set.
+        let min_row = self.get_min_row();
+
+        // Check the column range is in the allowed range and set it in the
+        // worksheet dimensions. The first column is always valid if the last
+        // column is valid.
+        if !self.check_dimensions(min_row, last_col) {
+            return Err(XlsxError::RowColumnLimitError);
+        }
+        self.check_dimensions(min_row, first_col);
+
+        // Get the index of the format object once for the whole range.
+        let xf_index = self.format_xf_index(format);
+
+        // Update existing col metadata objects or create new ones.
         for col_num in first_col..=last_col {
-            self.set_column_format(col_num, format)?;
+            match self.changed_cols.get_mut(&col_num) {
+                Some(col_options) => col_options.xf_index = xf_index,
+                None => {
+                    let col_options = ColOptions {
+                        width: self.default_col_width,
+                        xf_index,
+                        hidden: false,
+                        level: 0,
+                        collapsed: false,
+                        autofit: false,
+                        format: Some(format.clone()),
+                    };
+                    self.changed_cols.insert(col_num, col_options);
+                }
+            }
         }
 
         Ok(self)
@@ -8489,8 +8487,16 @@ impl Worksheet {
             return Err(XlsxError::RowColumnOrderError);
         }
 
+        // Check the column range is in the allowed range without updating
+        // dimensions. The first column is always valid if the last column is
+        // valid.
+        if !self.check_dimensions_only(0, last_col) {
+            return Err(XlsxError::RowColumnLimitError);
+        }
+
+        // Store the column hidden property for each column in the range.
         for col_num in first_col..=last_col {
-            self.set_column_hidden(col_num)?;
+            self.store_column_hidden(col_num);
         }
 
         Ok(self)
@@ -8922,6 +8928,8 @@ impl Worksheet {
     ///   previous table range.
     /// - [`XlsxError::AutofilterRangeOverlaps`] - The table autofilter range
     ///   overlaps the worksheet autofilter range.
+    /// - [`XlsxError::NameError`] - The table name doesn't meet one of Excel's
+    ///   criteria for table names.
     ///
     /// # Examples
     ///
@@ -8993,6 +9001,7 @@ impl Worksheet {
     /// <img
     /// src="https://rustxlsxwriter.github.io/images/table_set_columns.png">
     ///
+    #[allow(clippy::too_many_lines)]
     pub fn add_table(
         &mut self,
         first_row: RowNum,
@@ -9018,6 +9027,12 @@ impl Worksheet {
             return Err(XlsxError::TableError(
                 "Table must have at least one row".to_string(),
             ));
+        }
+
+        // Check that a user defined table name meets Excel's naming rules.
+        // Empty names are allowed here since a default name is generated later.
+        if !table.name.is_empty() {
+            utility::check_name(&table.name)?;
         }
 
         let default_headers =
@@ -12237,10 +12252,13 @@ impl Worksheet {
             return Err(XlsxError::RowColumnLimitError);
         }
 
-        // Check for empty struct name.
+        // Check for empty struct name. This happens when the type isn't a
+        // struct, or when it uses `#[serde(flatten)]`.
         if header_options.struct_name.is_empty() {
             return Err(XlsxError::ParameterError(
-                "Struct not found or serialized/deserialized.".to_string(),
+                "Serialization headers couldn't be determined, or a struct with `#[serde(flatten)]` was used. \
+                See the limitations section in the `rust_xlsxwriter::serializer` documentation."
+                    .to_string(),
             ));
         }
 
@@ -14838,6 +14856,58 @@ impl Worksheet {
         self
     }
 
+    /// Set the option to hide zero values in worksheet cells.
+    ///
+    /// The `set_hidden_zeroes()` method is used to hide any zero values that
+    /// appear in the cells of the displayed worksheet. This is the equivalent
+    /// of turning off the Excel option "Show a zero in cells that have zero
+    /// value".
+    ///
+    /// # Parameters
+    ///
+    /// - `enable`: Turn the property on/off. It is off by default.
+    ///
+    ///
+    /// # Examples
+    ///
+    /// The following example demonstrates hiding zero values in worksheet cells.
+    ///
+    /// ```
+    /// # // This code is available in examples/doc_worksheet_set_hidden_zeros.rs
+    /// #
+    /// # use rust_xlsxwriter::{Workbook, XlsxError};
+    /// #
+    /// # fn main() -> Result<(), XlsxError> {
+    /// #     let mut workbook = Workbook::new();
+    /// #
+    /// #     // Add a worksheet to the workbook.
+    /// #     let worksheet = workbook.add_worksheet();
+    /// #
+    ///     // Write some numbers, including a zero.
+    ///     worksheet.write(0, 0, 0)?;
+    ///     worksheet.write(1, 0, 1)?;
+    ///     worksheet.write(2, 0, 2)?;
+    ///     worksheet.write(3, 0, 3)?;
+    ///
+    ///     // Hide the zero values.
+    ///     worksheet.set_hidden_zeroes(true);
+    /// #
+    /// #     workbook.save("worksheet.xlsx")?;
+    /// #
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Output file:
+    ///
+    /// <img src="https://rustxlsxwriter.github.io/images/worksheet_set_hidden_zeros.png">
+    ///
+    pub fn set_hidden_zeroes(&mut self, enable: bool) -> &mut Worksheet {
+        self.hidden_zeroes = enable;
+
+        self
+    }
+
     /// Ignore an Excel error or warning in a worksheet cell.
     ///
     /// Excel flags a number of data errors and inconsistencies with a a small
@@ -15152,10 +15222,8 @@ impl Worksheet {
                             }
                         }
                     }
-                    CellType::Blank { .. } => {
-                        if filter_condition.should_match_blanks {
-                            return true;
-                        }
+                    CellType::Blank { .. } if filter_condition.should_match_blanks => {
+                        return true;
                     }
                     // We don't currently try to handle matching any other data types.
                     _ => {}
@@ -15521,7 +15589,7 @@ impl Worksheet {
     ) -> Result<&mut Worksheet, XlsxError> {
         // Transfer to dynamic formula handling function.
         if formula.has_dynamic_function {
-            return self.store_array_formula(row, col, row, col, formula, None, true);
+            return self.store_array_formula(row, col, row, col, formula, format, true);
         }
 
         // Check row and col are in the allowed range.
@@ -16246,6 +16314,38 @@ impl Worksheet {
         Ok(self)
     }
 
+    // Store the column hidden property.
+    fn store_column_hidden(&mut self, col: ColNum) {
+        // Update an existing col metadata object or create a new one.
+        match self.changed_cols.get_mut(&col) {
+            Some(col_options) => col_options.hidden = true,
+            None => {
+                let col_options = ColOptions {
+                    width: self.default_col_width,
+                    xf_index: 0,
+                    hidden: true,
+                    level: 0,
+                    collapsed: false,
+                    autofit: false,
+                    format: None,
+                };
+                self.changed_cols.insert(col, col_options);
+            }
+        }
+    }
+
+    // Convert from Excel character width to pixels. The algorithm for the
+    // conversion is different below 1 character width.
+    fn column_width_to_pixels(&self, width: f64) -> u32 {
+        if width == 0.0 {
+            0
+        } else if width < 1.0 {
+            (width * f64::from(self.max_digit_width + self.cell_padding)).round() as u32
+        } else {
+            (width * f64::from(self.max_digit_width)).round() as u32 + self.cell_padding
+        }
+    }
+
     // Store the column width in Excel pixel units. Updates to the width can
     // come from the external user or from the internal autofit() routines.
     fn store_column_width(&mut self, col: ColNum, width: u32, autofit: bool) {
@@ -16610,9 +16710,7 @@ impl Worksheet {
     // Convert the shape dimensions into drawing dimensions and add them to
     // the Drawing object. Also set the rel linkages between the files.
     pub(crate) fn prepare_worksheet_shapes(&mut self, shape_id: u32, drawing_id: u32) {
-        let mut shape_id = shape_id;
-
-        for (cell, shape) in &self.shapes.clone() {
+        for (shape_id, (cell, shape)) in (shape_id..).zip(self.shapes.clone().iter()) {
             let row = cell.0;
             let col = cell.1;
             let mut drawing_hyperlink = None;
@@ -16653,8 +16751,6 @@ impl Worksheet {
             drawing_info.url.clone_from(&drawing_hyperlink);
             self.drawing.drawings.push(drawing_info);
             self.drawing.shapes.push(shape.clone());
-
-            shape_id += 1;
         }
 
         // Store the linkage to the worksheets rels file.
@@ -16828,11 +16924,9 @@ impl Worksheet {
     // Convert the chart dimensions into drawing dimensions and add them to the
     // Drawing object. Also set the rel linkages between the files.
     pub(crate) fn prepare_worksheet_charts(&mut self, chart_id: u32, drawing_id: u32) {
-        let mut chart_id = chart_id;
-        for chart in self.charts.values_mut() {
+        for (chart_id, chart) in (chart_id..).zip(self.charts.values_mut()) {
             chart.id = chart_id;
             chart.add_axis_ids(chart_id);
-            chart_id += 1;
         }
 
         let mut rel_id = self.drawing_relationships.len() as u32;
@@ -18052,14 +18146,14 @@ impl Worksheet {
         {
             xml_start_tag(&mut self.writer, "sheetPr", &attributes);
 
-            // Write the pageSetUpPr element.
-            self.write_page_set_up_pr();
-
             // Write the tabColor element.
             self.write_tab_color();
 
             // Write the outlinePr element.
             self.write_outline_pr();
+
+            // Write the pageSetUpPr element.
+            self.write_page_set_up_pr();
 
             xml_end_tag(&mut self.writer, "sheetPr");
         } else {
@@ -18156,6 +18250,10 @@ impl Worksheet {
 
         if !self.screen_gridlines {
             attributes.push(("showGridLines", "0".to_string()));
+        }
+
+        if self.hidden_zeroes {
+            attributes.push(("showZeros", "0".to_string()));
         }
 
         if self.right_to_left {
@@ -18427,12 +18525,16 @@ impl Worksheet {
         let mut guid_index = 1;
         let mut priority = 1;
 
-        for (cell_range, conditionals_for_range) in &self.conditional_formats {
+        for cell_range in &self.conditional_format_order {
+            let conditionals_for_range = self.conditional_formats.get(cell_range).unwrap();
+
             // Only create an entry if range contains a x14 style conditional.
+            // Otherwise skip the range but maintain the priority count.
             if !conditionals_for_range
                 .iter()
                 .any(|rule| rule.has_x14_extensions())
             {
+                priority += conditionals_for_range.len() as u32;
                 continue;
             }
 
@@ -18464,6 +18566,7 @@ impl Worksheet {
         }
 
         xml_end_tag(&mut self.writer, "x14:conditionalFormattings");
+        xml_end_tag(&mut self.writer, "ext");
     }
 
     // Write the <dataValidations> element.
@@ -18818,7 +18921,7 @@ impl Worksheet {
     fn write_custom_filters(&mut self, filter_condition: &FilterCondition) {
         let mut attributes = vec![];
 
-        if !filter_condition.apply_logical_or {
+        if !filter_condition.apply_logical_or && filter_condition.custom2.is_some() {
             attributes.push(("and", "1".to_string()));
         }
 
@@ -18864,11 +18967,9 @@ impl Worksheet {
                     }
                     | CellType::RichString {
                         string, string_id, ..
-                    } => {
-                        if string_id.is_none() {
-                            let string_index = string_table.shared_string_index(Arc::clone(string));
-                            *string_id = Some(string_index);
-                        }
+                    } if string_id.is_none() => {
+                        let string_index = string_table.shared_string_index(Arc::clone(string));
+                        *string_id = Some(string_index);
                     }
                     _ => {}
                 }
@@ -19036,6 +19137,14 @@ impl Worksheet {
         mem::swap(&mut temp_changed_rows, &mut self.changed_rows);
     }
 
+    // Get the temporary file writer used for "constant memory" mode.
+    #[cfg(feature = "constant_memory")]
+    pub(crate) fn file_writer(&mut self) -> &mut BufWriter<File> {
+        self.file_writer
+            .as_mut()
+            .expect("constant memory worksheets required a temp file")
+    }
+
     // Flush the last row of constant memory data, the write-ahead cache and any
     // modified rows.
     #[cfg(feature = "constant_memory")]
@@ -19079,9 +19188,8 @@ impl Worksheet {
         // First find any write ahead cached rows.
         let mut intermediate_rows: Vec<_> = self
             .write_ahead
-            .keys()
-            .filter(|x| **x < next_row)
-            .copied()
+            .range(..next_row)
+            .map(|(row, _)| *row)
             .collect();
 
         // Add any changed row elements.
@@ -19148,7 +19256,7 @@ impl Worksheet {
                 CellType::Number { number, xf_index } | CellType::DateTime { number, xf_index } => {
                     let xf_index = self.get_cell_xf_index(*xf_index, row_options, col_num);
                     Self::write_number_cell(
-                        &mut self.file_writer,
+                        self.file_writer(),
                         current_row + 1,
                         col_name,
                         *number,
@@ -19164,7 +19272,7 @@ impl Worksheet {
                     if let Some(string_id) = string_id {
                         let xf_index = self.get_cell_xf_index(*xf_index, row_options, col_num);
                         Self::write_string_cell(
-                            &mut self.file_writer,
+                            self.file_writer(),
                             current_row + 1,
                             col_name,
                             *string_id,
@@ -19178,7 +19286,7 @@ impl Worksheet {
                 } => {
                     let xf_index = self.get_cell_xf_index(*xf_index, row_options, col_num);
                     Self::write_inline_rich_string_cell(
-                        &mut self.file_writer,
+                        self.file_writer(),
                         current_row + 1,
                         col_name,
                         string,
@@ -19191,7 +19299,7 @@ impl Worksheet {
                 } => {
                     let xf_index = self.get_cell_xf_index(*xf_index, row_options, col_num);
                     Self::write_inline_string_cell(
-                        &mut self.file_writer,
+                        self.file_writer(),
                         current_row + 1,
                         col_name,
                         string,
@@ -19206,7 +19314,7 @@ impl Worksheet {
                 } => {
                     let xf_index = self.get_cell_xf_index(*xf_index, row_options, col_num);
                     Self::write_formula_cell(
-                        &mut self.file_writer,
+                        self.file_writer(),
                         current_row + 1,
                         col_name,
                         formula,
@@ -19224,7 +19332,7 @@ impl Worksheet {
                 } => {
                     let xf_index = self.get_cell_xf_index(*xf_index, row_options, col_num);
                     Self::write_array_formula_cell(
-                        &mut self.file_writer,
+                        self.file_writer(),
                         current_row + 1,
                         col_name,
                         formula,
@@ -19237,19 +19345,14 @@ impl Worksheet {
 
                 CellType::Blank { xf_index } => {
                     let xf_index = self.get_cell_xf_index(*xf_index, row_options, col_num);
-                    Self::write_blank_cell(
-                        &mut self.file_writer,
-                        current_row + 1,
-                        col_name,
-                        xf_index,
-                    );
+                    Self::write_blank_cell(self.file_writer(), current_row + 1, col_name, xf_index);
                 }
 
                 CellType::Boolean { boolean, xf_index } => {
                     let xf_index = self.get_cell_xf_index(*xf_index, row_options, col_num);
 
                     Self::write_boolean_cell(
-                        &mut self.file_writer,
+                        self.file_writer(),
                         current_row + 1,
                         col_name,
                         *boolean,
@@ -19261,7 +19364,7 @@ impl Worksheet {
                     let xf_index = self.get_cell_xf_index(*xf_index, row_options, col_num);
                     let image_id = self.global_embedded_image_indices[*value as usize];
                     Self::write_error_cell(
-                        &mut self.file_writer,
+                        self.file_writer(),
                         current_row + 1,
                         col_name,
                         image_id,
@@ -19270,7 +19373,7 @@ impl Worksheet {
                 }
             }
         }
-        xml_end_tag(&mut self.file_writer, "row");
+        xml_end_tag(self.file_writer(), "row");
 
         // Swap back in changed rows data.
         mem::swap(&mut temp_changed_rows, &mut self.changed_rows);
@@ -19447,9 +19550,9 @@ impl Worksheet {
         }
 
         if has_data {
-            xml_start_tag(&mut self.file_writer, "row", &attributes);
+            xml_start_tag(self.file_writer(), "row", &attributes);
         } else {
-            xml_empty_tag(&mut self.file_writer, "row", &attributes);
+            xml_empty_tag(self.file_writer(), "row", &attributes);
         }
     }
 
@@ -19464,13 +19567,17 @@ impl Worksheet {
         number: f64,
         xf_index: u32,
     ) {
-        // Use the optional `ryu` crate to format f64 cell number data as a
-        // string. Note, the the slightly faster `format_finite()` buffer
-        // function is safe to use here since nan/inf numbers are filtered out
-        // at the `store_number()` level and written as strings.
-        #[cfg(feature = "ryu")]
+        // Use the optional `zmij` or `ryu` crates to format f64 cell number
+        // data as a string. Note, the the slightly faster `format_finite()`
+        // buffer function is safe to use here since nan/inf numbers are
+        // filtered out at the `store_number()` level and written as strings.
+        #[cfg(feature = "zmij")]
+        let mut buffer = zmij::Buffer::new();
+
+        #[cfg(all(feature = "ryu", not(feature = "zmij")))]
         let mut buffer = ryu::Buffer::new();
-        #[cfg(feature = "ryu")]
+
+        #[cfg(any(feature = "ryu", feature = "zmij"))]
         let number = buffer.format_finite(number);
 
         if xf_index > 0 {
@@ -19480,8 +19587,7 @@ impl Worksheet {
             )
             .expect(XML_WRITE_ERROR);
         } else {
-            write!(writer, r#"<c r="{col_name}{row}"><v>{number}</v></c>"#,)
-                .expect(XML_WRITE_ERROR);
+            write!(writer, r#"<c r="{col_name}{row}"><v>{number}</v></c>"#).expect(XML_WRITE_ERROR);
         }
     }
 
@@ -19736,32 +19842,30 @@ impl Worksheet {
 
         xml_start_tag_only(&mut self.writer, "cols");
 
+        // Take the column data temporarily so that it can be borrowed while
+        // writing the <col> elements. It is restored at the end.
+        let changed_cols = std::mem::take(&mut self.changed_cols);
+
         // We need to write contiguous equivalent columns as a range with first
         // and last columns, so we convert the HashMap to a sorted vector and
         // iterate over that.
-        let mut col_options: Vec<_> = self
-            .changed_cols
-            .iter()
-            .map(|(k, v)| (*k, v.clone()))
-            .collect();
+        let mut col_options: Vec<_> = changed_cols.iter().map(|(k, v)| (*k, v)).collect();
         col_options.sort_unstable_by_key(|x| x.0);
         let mut col_options = col_options.into_iter();
 
         // Remove the first (key, value) tuple in the vector and use it to set
         // the initial/previous properties.
-        let first_col_options = col_options.next().unwrap();
-        let mut first_col = first_col_options.0;
-        let mut prev_col_options = first_col_options.1;
+        let (mut first_col, mut prev_col_options) = col_options.next().unwrap();
         let mut last_col = first_col;
 
         for (col_num, col_options) in col_options {
             // Check if the column number is contiguous with the previous column
             // and if the format is the same.
-            if col_num == last_col + 1 && col_options == prev_col_options {
+            if col_num == last_col + 1 && col_options.has_same_properties(prev_col_options) {
                 last_col = col_num;
             } else {
                 // If not write out the current range of columns and start again.
-                self.write_col_element(first_col, last_col, &prev_col_options);
+                self.write_col_element(first_col, last_col, prev_col_options);
                 first_col = col_num;
                 last_col = first_col;
                 prev_col_options = col_options;
@@ -19769,7 +19873,10 @@ impl Worksheet {
         }
 
         // We will exit the previous loop with one unhandled column range.
-        self.write_col_element(first_col, last_col, &prev_col_options);
+        self.write_col_element(first_col, last_col, prev_col_options);
+
+        // Restore the column data.
+        self.changed_cols = changed_cols;
 
         xml_end_tag(&mut self.writer, "cols");
     }
@@ -20139,8 +20246,6 @@ impl Worksheet {
             self.write_sparkline_groups();
         }
 
-        xml_end_tag(&mut self.writer, "ext");
-
         xml_end_tag(&mut self.writer, "extLst");
     }
 
@@ -20160,6 +20265,7 @@ impl Worksheet {
         }
 
         xml_end_tag(&mut self.writer, "x14:sparklineGroups");
+        xml_end_tag(&mut self.writer, "ext");
     }
 
     // Write the <x14:sparklineGroup> element.
@@ -21005,6 +21111,19 @@ struct ColOptions {
     format: Option<Format>,
 }
 
+impl ColOptions {
+    // Check if two columns have the same properties in the <col> element. The
+    // format is represented by the xf_index so it doesn't need to be compared.
+    fn has_same_properties(&self, other: &ColOptions) -> bool {
+        self.width == other.width
+            && self.xf_index == other.xf_index
+            && self.level == other.level
+            && self.hidden == other.hidden
+            && self.collapsed == other.collapsed
+            && self.autofit == other.autofit
+    }
+}
+
 #[derive(Clone)]
 enum CellType {
     ArrayFormula {
@@ -21172,28 +21291,27 @@ impl DefinedName {
     pub(crate) fn set_range(&mut self) {
         match self.name_type {
             DefinedNameType::Autofilter | DefinedNameType::PrintArea => {
-                let range;
-                if self.first_col == 0 && self.last_col == COL_MAX - 1 {
+                let range = if self.first_col == 0 && self.last_col == COL_MAX - 1 {
                     // The print range is the entire column range, therefore we
                     // create a row only range.
-                    range = format!("${}:${}", self.first_row + 1, self.last_row + 1);
+                    format!("${}:${}", self.first_row + 1, self.last_row + 1)
                 } else if self.first_row == 0 && self.last_row == ROW_MAX - 1 {
                     // The print range is the entire row range, therefore we
                     // create a column only range.
-                    range = format!(
+                    format!(
                         "${}:${}",
                         utility::column_number_to_name(self.first_col),
                         utility::column_number_to_name(self.last_col)
-                    );
+                    )
                 } else {
                     // Otherwise handle it as a standard cell range.
-                    range = utility::cell_range_absolute(
+                    utility::cell_range_absolute(
                         self.first_row,
                         self.first_col,
                         self.last_row,
                         self.last_col,
-                    );
-                }
+                    )
+                };
 
                 self.range = format!("{}!{}", self.quoted_sheet_name, range);
             }

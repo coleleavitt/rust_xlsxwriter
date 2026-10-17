@@ -5,6 +5,171 @@ This is the changelog/release notes for the `rust_xlsxwriter` crate.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.1] - 2026-09-14
+
+### Fixed
+
+- Fixed issue where formatting wasn't applied to dynamic formulas.
+  See [Issue #190].
+
+  [Issue #190]: https://github.com/jmcnamara/rust_xlsxwriter/issues/190
+
+
+## [0.99.0] - 2026-08-23
+
+### Changed
+
+- **Breaking change**: Renamed error `XlsxError::TableNameReused` to
+  `XlsxError::NameReused` to clarify that Table names and Defined names must be
+  unique to each other as well as within their own namespaces. Also added checks
+  to ensure this. See [Issue #189].
+
+### Fixed
+
+- Fixed issue in `utility::quote_sheet_name()` to avoid incorrectly matching
+  names like `Q.1` as cell references. See [Issue #189].
+
+- Fixed issue where where worksheet level defined names with quotes like
+- `'Sheet 1'!Name` were not split correctly. See [Issue #189].
+
+### Added
+
+- Added additional validation checks for Table names and Defined names to more
+  closely match Excel's requirements. See [Issue #189].
+
+  [Issue #189]: https://github.com/jmcnamara/rust_xlsxwriter/issues/189
+
+
+## [0.98.2] - 2026-08-17
+
+### Fixed
+
+- Fixed issue where an empty sheet or variable name in `Workbook::define_name()`
+  created an invalid Excel file. See [Issue #186].
+
+  [Issue #186]: https://github.com/jmcnamara/rust_xlsxwriter/issues/186
+
+- Fixed issue where a truncated PNG or JPEG image data caused a panic when
+  reading the image dimensions. See [Issue #187].
+
+  [Issue #187]: https://github.com/jmcnamara/rust_xlsxwriter/issues/187
+
+- Fixed a potential overflow issue when reading a BMP image with a height of
+  `i32::MIN`. See [Issue #188].
+
+  [Issue #188]: https://github.com/jmcnamara/rust_xlsxwriter/issues/188
+
+
+## [0.98.1] - 2026-08-15
+
+### Fixed
+
+- Fixed an issue where sparklines and conditional formatting data bars on the
+  same worksheet caused an XML error. See [Issue #185].
+
+  [Issue #185]: https://github.com/jmcnamara/rust_xlsxwriter/issues/185
+
+
+## [0.98.0] - 2026-08-15
+
+### Added
+
+- Updated optional `polars` dependency to v0.55 to allow a similar update in the
+  [`polars_excel_writer`] crate.
+
+
+## [0.97.1] - 2026-08-05
+
+### Fixed
+
+- Fixed issue where using `Worksheet::set_tab_color()` and
+  `Worksheet::set_print_fit_to_pages()` on the same worksheet caused an invalid
+  Excel file due to an XML element ordering issue. See [Issue #184].
+
+  [Issue #184]: https://github.com/jmcnamara/rust_xlsxwriter/issues/184
+
+
+## [0.97.0] - 2026-07-30
+
+### Added
+
+- Updated `zip` dependency to v8.3 to pick up two upstream fixes for ZIP64
+  "large file" handling. This requires a MSRV of 1.88.0. See [Issue #183].
+
+  [Issue #183]: https://github.com/jmcnamara/rust_xlsxwriter/issues/183
+
+### Fixed
+
+- Fixed issue where serializing a struct containing a map field returned an
+  error even if the field was skipped. Map types cannot be serialized to Excel,
+  but a map field can now be skipped via the `#[serde(skip)]` (this was already
+  working) or `#[xlsx(skip)]` attributes, the `CustomSerializeField::skip()`
+  method, or by omitting it via `SerializeFieldOptions::use_custom_headers_only()`.
+
+  [Issue #182].
+
+  [Issue #182]: https://github.com/jmcnamara/rust_xlsxwriter/issues/182
+
+- Fixed an issue when handling BMP images that use a "top-down" DIB (Device
+  Independent Bitmap) row order.
+
+- Added a check for the minimum required data size when reading an image so
+  that invalid or truncated image data returns an error instead of causing a
+  panic.
+
+
+## [0.96.0] - 2026-07-01
+
+### Added
+
+- Dropped the `Seek` trait requirement from the [`Workbook::save_to_writer()`]
+  API which allows it to write to STDOUT, to buffers (without Cursor), and to
+  other `Write` interfaces that don't support seek. This was achieved by
+  moving to the [`zip.rs`] stream API internally. See the discussion at
+  [Feature Request #179].
+
+  [Feature Request #179]: https://github.com/jmcnamara/rust_xlsxwriter/issues/179
+  [`zip.rs`]: https://crates.io/crates/zip
+
+- Updated optional `polars` dependency to v0.54 to allow a similar update in
+  the [`polars_excel_writer`] crate.
+
+
+## [0.95.0] - 2026-05-09
+
+### Added
+
+- Added an optional dependency on the [zmij] crate to speed up writing numeric
+  worksheet data. The feature flag is `zmij`.
+
+  This feature gives an approximate 10% performance increase in writing numeric
+  data to a worksheet. See the performance analysis in [Issue #170]. The
+  performance is better than the [ryu] crate, which is by the same author and
+  has the same interface. As such, the `ryu` feature/crate is deprecated in
+  favour of the `zmij` feature/crate.
+
+  [Issue #170]: https://github.com/jmcnamara/rust_xlsxwriter/issues/170
+
+  [zmij]: https://docs.rs/zmij/latest/zmij/index.html
+
+
+## [0.94.1] - 2026-05-06
+
+### Fixed
+
+- Fixed issue where escaped URLs were double escaped due to case-sensitivity.
+
+  [Issue #175].
+
+  [Issue #175]: https://github.com/jmcnamara/rust_xlsxwriter/issues/175
+
+- Fixed issue where chart titles containing brackets were ignored and not added.
+
+  [Issue #173].
+
+  [Issue #173]: https://github.com/jmcnamara/rust_xlsxwriter/issues/173
+
+
 ## [0.94.0] - 2026-02-28
 
 ### Added

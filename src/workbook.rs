@@ -219,7 +219,7 @@ mod tests;
 
 use std::collections::{HashMap, HashSet};
 use std::fs::{read_to_string, File};
-use std::io::{BufReader, Cursor, Read, Seek, Write};
+use std::io::{BufReader, Cursor, Read, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use zip::ZipArchive;
@@ -350,9 +350,11 @@ pub struct Workbook {
     defined_names: Vec<DefinedName>,
     user_defined_names: Vec<DefinedName>,
     read_only_mode: u8,
+    calculation_mode: CalculationMode,
     num_worksheets: u16,
     num_chartsheets: u16,
     use_large_file: bool,
+    zip_compression_level: Option<i64>,
     default_format: Format,
     default_row_height: u32,
     default_col_width: u32,
@@ -424,6 +426,7 @@ impl Workbook {
             border_count: 0,
             num_formats: vec![],
             read_only_mode: 0,
+            calculation_mode: CalculationMode::Automatic,
             has_hyperlink_style: false,
             worksheets: vec![],
             xf_formats: vec![],
@@ -442,6 +445,7 @@ impl Workbook {
             num_worksheets: 0,
             num_chartsheets: 0,
             use_large_file: false,
+            zip_compression_level: None,
             feature_property_bags: HashSet::new(),
             default_format: Format::default(),
             default_row_height: 20,
@@ -541,6 +545,13 @@ impl Workbook {
     /// [restrictions](../performance/index.html#restrictions-when-using-constant-memory-mode)
     /// on its usage.
     ///
+    /// # Errors
+    ///
+    /// - [`XlsxError::TempFileError`] - Error creating the temporary file used
+    ///   by the worksheet. This is usually caused by the default temporary
+    ///   directory, or the directory set with [`Workbook::set_tempdir()`], not
+    ///   being writable.
+    ///
     /// # Examples
     ///
     /// The following example demonstrates adding worksheets in "standard" and
@@ -560,7 +571,7 @@ impl Workbook {
     ///     worksheet.write(0, 0, "Standard")?;
     ///
     ///     // Add a worksheet in "constant memory" mode.
-    ///     let worksheet = workbook.add_worksheet_with_constant_memory();
+    ///     let worksheet = workbook.add_worksheet_with_constant_memory()?;
     ///     worksheet.write(0, 0, "Constant memory")?;
     ///
     /// #     workbook.save("workbook.xlsx")?;
@@ -576,7 +587,10 @@ impl Workbook {
     ///
     #[cfg(feature = "constant_memory")]
     #[cfg_attr(docsrs, doc(cfg(feature = "constant_memory")))]
-    pub fn add_worksheet_with_constant_memory(&mut self) -> &mut Worksheet {
+    pub fn add_worksheet_with_constant_memory(&mut self) -> Result<&mut Worksheet, XlsxError> {
+        // Create temp file first so that a failure doesn't change the workbook.
+        let file_writer = self.new_tempfile_writer()?;
+
         let name = format!("Sheet{}", self.num_worksheets + 1);
         self.num_worksheets += 1;
 
@@ -585,9 +599,7 @@ impl Workbook {
 
         self.initialize_default_format(&mut worksheet);
 
-        if let Some(tempdir) = &self.tempdir {
-            worksheet.file_writer = BufWriter::new(tempfile_in(tempdir).unwrap());
-        }
+        worksheet.file_writer = Some(file_writer);
 
         worksheet.use_inline_strings = true;
         worksheet.use_constant_memory = true;
@@ -598,7 +610,7 @@ impl Workbook {
         self.worksheets.push(worksheet);
         let worksheet = self.worksheets.last_mut().unwrap();
 
-        worksheet
+        Ok(worksheet)
     }
 
     /// Add a new worksheet that supports "low memory" mode.
@@ -615,6 +627,13 @@ impl Workbook {
     /// are some
     /// [restrictions](../performance/index.html#restrictions-when-using-constant-memory-mode)
     /// on its usage.
+    ///
+    /// # Errors
+    ///
+    /// - [`XlsxError::TempFileError`] - Error creating the temporary file used
+    ///   by the worksheet. This is usually caused by the default temporary
+    ///   directory, or the directory set with [`Workbook::set_tempdir()`], not
+    ///   being writable.
     ///
     /// # Examples
     ///
@@ -635,7 +654,7 @@ impl Workbook {
     ///     worksheet.write(0, 0, "Standard")?;
     ///
     ///     // Add a worksheet in "low memory" mode.
-    ///     let worksheet = workbook.add_worksheet_with_low_memory();
+    ///     let worksheet = workbook.add_worksheet_with_low_memory()?;
     ///     worksheet.write(0, 0, "Low memory")?;
     ///
     /// #     workbook.save("workbook.xlsx")?;
@@ -651,7 +670,10 @@ impl Workbook {
     ///
     #[cfg(feature = "constant_memory")]
     #[cfg_attr(docsrs, doc(cfg(feature = "constant_memory")))]
-    pub fn add_worksheet_with_low_memory(&mut self) -> &mut Worksheet {
+    pub fn add_worksheet_with_low_memory(&mut self) -> Result<&mut Worksheet, XlsxError> {
+        // Create temp file first so that a failure doesn't change the workbook.
+        let file_writer = self.new_tempfile_writer()?;
+
         let name = format!("Sheet{}", self.num_worksheets + 1);
         self.num_worksheets += 1;
 
@@ -660,9 +682,7 @@ impl Workbook {
 
         self.initialize_default_format(&mut worksheet);
 
-        if let Some(tempdir) = &self.tempdir {
-            worksheet.file_writer = BufWriter::new(tempfile_in(tempdir).unwrap());
-        }
+        worksheet.file_writer = Some(file_writer);
 
         worksheet.use_inline_strings = false;
         worksheet.use_constant_memory = true;
@@ -676,7 +696,7 @@ impl Workbook {
         self.worksheets.push(worksheet);
         let worksheet = self.worksheets.last_mut().unwrap();
 
-        worksheet
+        Ok(worksheet)
     }
 
     /// Create a new worksheet that supports "constant memory" mode.
@@ -703,14 +723,19 @@ impl Workbook {
     /// Constant memory mode requires the `rust_xlsxwriter` `constant_memory`
     /// feature flag.
     ///
+    /// # Errors
+    ///
+    /// - [`XlsxError::TempFileError`] - Error creating the temporary file used
+    ///   by the worksheet. This is usually caused by the default temporary
+    ///   directory, or the directory set with [`Workbook::set_tempdir()`], not
+    ///   being writable.
+    ///
     #[cfg(feature = "constant_memory")]
     #[cfg_attr(docsrs, doc(cfg(feature = "constant_memory")))]
-    pub fn new_worksheet_with_constant_memory(&mut self) -> Worksheet {
+    pub fn new_worksheet_with_constant_memory(&mut self) -> Result<Worksheet, XlsxError> {
         let mut worksheet = Worksheet::new();
 
-        if let Some(tempdir) = &self.tempdir {
-            worksheet.file_writer = BufWriter::new(tempfile_in(tempdir).unwrap());
-        }
+        worksheet.file_writer = Some(self.new_tempfile_writer()?);
 
         worksheet.use_inline_strings = true;
         worksheet.use_constant_memory = true;
@@ -718,7 +743,7 @@ impl Workbook {
         worksheet.workbook_xf_indices = Arc::clone(&self.xf_indices);
         worksheet.has_workbook_global_xfs = true;
 
-        worksheet
+        Ok(worksheet)
     }
 
     /// Create a new worksheet that supports "low memory" mode.
@@ -745,14 +770,19 @@ impl Workbook {
     /// Constant memory mode requires the `rust_xlsxwriter` `constant_memory`
     /// feature flag.
     ///
+    /// # Errors
+    ///
+    /// - [`XlsxError::TempFileError`] - Error creating the temporary file used
+    ///   by the worksheet. This is usually caused by the default temporary
+    ///   directory, or the directory set with [`Workbook::set_tempdir()`], not
+    ///   being writable.
+    ///
     #[cfg(feature = "constant_memory")]
     #[cfg_attr(docsrs, doc(cfg(feature = "constant_memory")))]
-    pub fn new_worksheet_with_low_memory(&mut self) -> Worksheet {
+    pub fn new_worksheet_with_low_memory(&mut self) -> Result<Worksheet, XlsxError> {
         let mut worksheet = Worksheet::new();
 
-        if let Some(tempdir) = &self.tempdir {
-            worksheet.file_writer = BufWriter::new(tempfile_in(tempdir).unwrap());
-        }
+        worksheet.file_writer = Some(self.new_tempfile_writer()?);
 
         worksheet.use_inline_strings = false;
         worksheet.use_constant_memory = true;
@@ -763,7 +793,7 @@ impl Workbook {
         worksheet.string_table = Arc::clone(&self.string_table);
         worksheet.has_workbook_global_sst = true;
 
-        worksheet
+        Ok(worksheet)
     }
 
     /// Set the temporary directory used in "constant memory" and "low memory"
@@ -788,8 +818,9 @@ impl Workbook {
     ///
     /// # Errors
     ///
-    /// - [`XlsxError::IoError`] - A wrapper for various IO errors when creating
-    ///   a temporary file in the custom temporary directory.
+    /// - [`XlsxError::TempFileError`] - Error creating a temporary file in the
+    ///   custom temporary directory. This is usually caused by the directory
+    ///   not existing or not being writable.
     ///
     /// # Examples
     ///
@@ -809,7 +840,7 @@ impl Workbook {
     ///     workbook.set_tempdir(".")?;
     ///
     ///     // Add a worksheet in "constant memory" mode.
-    ///     let worksheet = workbook.add_worksheet_with_constant_memory();
+    ///     let worksheet = workbook.add_worksheet_with_constant_memory()?;
     ///     worksheet.write(0, 0, "Hello")?;
     /// #
     /// #     workbook.save("workbook.xlsx")?;
@@ -827,7 +858,7 @@ impl Workbook {
     #[cfg_attr(docsrs, doc(cfg(feature = "constant_memory")))]
     pub fn set_tempdir<P: AsRef<Path>>(&mut self, dir: P) -> Result<&mut Workbook, XlsxError> {
         // Check that the directory exists and is writable.
-        tempfile_in(&dir)?;
+        Self::create_tempfile(dir.as_ref())?;
 
         self.tempdir = Some(dir.as_ref().to_path_buf());
 
@@ -1267,7 +1298,7 @@ impl Workbook {
     ///
     /// - [`XlsxError::SheetnameReused`] - Worksheet name is already in use in
     ///   the workbook.
-    /// - [`XlsxError::TableNameReused`] - Worksheet Table name is already in
+    /// - [`XlsxError::NameReused`] - A Defined name or Table name is already in
     ///   use in the workbook.
     /// - [`XlsxError::ChartError`] - A Chartsheet doesn't contain a chart.
     /// - [`XlsxError::IoError`] - A wrapper for various IO errors when creating
@@ -1379,8 +1410,9 @@ impl Workbook {
     ///
     /// The workbook `save_to_writer()` method is similar to the
     /// [`Workbook::save()`] method except that it writes the xlsx file to types
-    /// that implement the [`Write`] trait such as the [`std::fs::File`] type or
-    /// buffers.
+    /// that implement the [`Write`] trait such as the [`std::fs::File`] type.
+    /// The interface doesn't require `Seek` (since version 0.96) so it is also
+    /// possible to write directly to STDOUT or to a [`u8`] buffer.
     ///
     /// # Parameters
     ///
@@ -1402,11 +1434,10 @@ impl Workbook {
     ///
     /// ```
     /// # // This code is available in examples/doc_workbook_save_to_writer.rs
-    /// #
-    /// # use std::fs::File;
-    /// # use std::io::{Cursor, Write};
-    /// #
-    /// # use rust_xlsxwriter::{Workbook, XlsxError};
+    /// use std::fs::File;
+    /// use std::io::Write;
+    ///
+    /// use rust_xlsxwriter::{Workbook, XlsxError};
     ///
     /// fn main() -> Result<(), XlsxError> {
     ///     let mut workbook = Workbook::new();
@@ -1414,26 +1445,25 @@ impl Workbook {
     ///     let worksheet = workbook.add_worksheet();
     ///     worksheet.write_string(0, 0, "Hello")?;
     ///
-    ///     // Save the file to a File object.
+    ///     // 1. Save the file to a File object.
     ///     let file = File::create("workbook1.xlsx")?;
     ///     workbook.save_to_writer(file)?;
     ///
-    ///     // Save the file to a buffer. It is wrapped in a Cursor because it need to
-    ///     // implement the `Seek` trait.
-    ///     let mut cursor = Cursor::new(Vec::new());
-    ///     workbook.save_to_writer(&mut cursor)?;
+    ///     // 2. Save the file to a buffer.
+    ///     let mut buf = Vec::new();
+    ///     workbook.save_to_writer(&mut buf)?;
     ///
     ///     // Write the buffer to a file for the sake of the example.
-    ///     let buf = cursor.into_inner();
     ///     let mut file = File::create("workbook2.xlsx")?;
     ///     Write::write_all(&mut file, &buf)?;
     ///
     ///     Ok(())
     /// }
+    /// ```
     ///
     pub fn save_to_writer<W>(&mut self, writer: W) -> Result<(), XlsxError>
     where
-        W: Write + Seek + Send,
+        W: Write + Send,
     {
         self.save_internal(writer)?;
         Ok(())
@@ -1441,8 +1471,8 @@ impl Workbook {
 
     /// Create a defined name in the workbook to use as a variable.
     ///
-    /// The `define_name()` method is used to define a variable name that can
-    /// be used to represent a value, a single cell, or a range of cells in a
+    /// The `define_name()` method is used to define a variable name that can be
+    /// used to represent a value, a single cell, or a range of cells in a
     /// workbook. These are sometimes referred to as "Named Ranges."
     ///
     /// Defined names are generally used to simplify or clarify formulas by
@@ -1466,11 +1496,10 @@ impl Workbook {
     ///
     /// See the full example below.
     ///
-    /// Note, Excel has limitations on names used in defined names. For example,
-    /// it must start with a letter or underscore and cannot contain a space or
-    /// any of the characters: `,/*[]:\"'`. It also cannot look like an Excel
-    /// range such as `A1`, `XFD12345`, or `R1C1`. If in doubt, it is best to test
-    /// the name in Excel first.
+    /// Note, Excel has limitations on names used in defined names. See
+    /// [`XlsxError::NameError`] for details. It is best to keep the name to
+    /// simple words with alphabetic characters and non-leading digits. If in
+    /// doubt test the name in Excel.
     ///
     /// For local defined names sheet name must exist (at the time of saving)
     /// and if the sheet name contains spaces or special characters you must
@@ -1492,10 +1521,8 @@ impl Workbook {
     ///
     /// # Errors
     ///
-    /// - [`XlsxError::ParameterError`] - The following Excel error cases will
-    ///   raise a `ParameterError` error:
-    ///   * If the name doesn't start with a letter or underscore.
-    ///   * If the name contains `,/*[]:\"'` or `space`.
+    /// - [`XlsxError::NameError`] - The name doesn't meet one of Excel's
+    ///   criteria for defined names.
     ///
     /// # Examples
     ///
@@ -1561,11 +1588,19 @@ impl Workbook {
         let mut defined_name = DefinedName::new();
         let name = name.into();
 
+        // Check for a name that starts with ! before we use it as a delimiter.
+        if name.starts_with('!') {
+            return Err(XlsxError::NameError(
+                name,
+                "Name contains a character that isn't allowed by Excel: '!'".to_string(),
+            ));
+        }
+
         // Match Global/Workbook or Local/Worksheet defined names.
-        match name.find('!') {
-            Some(position) => {
-                defined_name.quoted_sheet_name = name[0..position].to_string();
-                defined_name.name = name[position + 1..].to_string();
+        match utility::split_local_name(&name) {
+            Some((sheet_name, local_name)) => {
+                defined_name.quoted_sheet_name = sheet_name.to_string();
+                defined_name.name = local_name.to_string();
                 defined_name.name_type = DefinedNameType::Local;
             }
             None => {
@@ -1574,30 +1609,8 @@ impl Workbook {
             }
         }
 
-        // Excel requires that the name starts with a letter or underscore.
-        // Also, backspace is allowed but undocumented by Excel.
-        if !defined_name.name.chars().next().unwrap().is_alphabetic()
-            && !defined_name.name.starts_with('_')
-            && !defined_name.name.starts_with('\\')
-        {
-            let error = format!(
-                "Name '{}' must start with a letter or underscore in Excel",
-                defined_name.name
-            );
-            return Err(XlsxError::ParameterError(error));
-        }
-
-        // Excel also prohibits certain characters in the name.
-        if defined_name
-            .name
-            .contains([' ', ',', '/', '*', '[', ']', ':', '"', '\''])
-        {
-            let error = format!(
-                "Name '{}' cannot contain any of the characters `,/*[]:\"'` or `space` in Excel",
-                defined_name.name
-            );
-            return Err(XlsxError::ParameterError(error));
-        }
+        // Check the name meets Excel's naming rules for defined names.
+        utility::check_name(&defined_name.name)?;
 
         defined_name.range = utility::formula_to_string(formula);
         defined_name.set_sort_name();
@@ -2194,6 +2207,64 @@ impl Workbook {
         self
     }
 
+    /// Set the compression level for the xlsx zip container.
+    ///
+    /// Set the deflate compression level used for the XML files in the xlsx zip
+    /// container. Lower levels are faster and higher levels produce smaller
+    /// files.
+    ///
+    /// See the [Zip compression level] section of the performance documentation
+    /// for a comparison of the file size and save time at each level.
+    ///
+    /// [Zip compression level]: crate::performance#zip-compression-level
+    ///
+    /// # Parameters
+    ///
+    /// - `level`: The compression level in the range 1 to 9. The default is 6.
+    ///   Values outside the range are ignored with a warning.
+    ///
+    /// # Examples
+    ///
+    /// The following example demonstrates setting the zip compression level of
+    /// a workbook to a different level than the default, to make saving faster
+    /// in exchange for a slightly larger file.
+    ///
+    /// ```
+    /// # // This code is available in examples/doc_workbook_set_zip_compression_level.rs
+    /// #
+    /// # use rust_xlsxwriter::{Workbook, XlsxError};
+    /// #
+    /// # fn main() -> Result<(), XlsxError> {
+    ///     let mut workbook = Workbook::new();
+    ///
+    ///     let worksheet = workbook.add_worksheet();
+    ///
+    ///     // Write some data to the worksheet.
+    ///     for row in 0..1000 {
+    ///         worksheet.write_number(row, 0, row)?;
+    ///         worksheet.write_string(row, 1, "Hello")?;
+    ///     }
+    ///
+    ///     // Use a faster compression level than the default level 6.
+    ///     workbook.set_zip_compression_level(3);
+    /// #
+    /// #     workbook.save("workbook.xlsx")?;
+    /// #
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
+    pub fn set_zip_compression_level(&mut self, level: u8) -> &mut Workbook {
+        if !(1..=9).contains(&level) {
+            eprintln!("Zip compression level {level} outside range: 1 <= level <= 9.");
+            return self;
+        }
+
+        self.zip_compression_level = Some(i64::from(level));
+
+        self
+    }
+
     /// Add a signed vba macro file to the workbook.
     ///
     /// The `add_vba_project_with_signature()` method can be used to add signed
@@ -2348,6 +2419,70 @@ impl Workbook {
         self
     }
 
+    /// Set the calculation mode for formulas in the workbook.
+    ///
+    /// By default Excel recalculates all the formulas in a `rust_xlsxwriter`
+    /// file when it is opened, and then whenever a value that a formula depends
+    /// on changes. The `set_calculation_mode()` method can be used to change
+    /// this behavior. See [`CalculationMode`] for the available modes.
+    ///
+    /// [`CalculationMode::Manual`] is mainly of use for large workbooks with
+    /// slow formulas, where the user can trigger the calculation manually,
+    /// generally by pressing F9. In this mode Excel doesn't recalculate the
+    /// formulas when the file is opened, so it displays the formula results
+    /// stored in the file. Since `rust_xlsxwriter` doesn't calculate formulas
+    /// these results will be 0 unless they have been set with
+    /// [`Worksheet::set_formula_result()`](crate::Worksheet::set_formula_result)
+    /// or [`Formula::set_result()`](crate::Formula::set_result).
+    ///
+    /// # Parameters
+    ///
+    /// - `mode`: A [`CalculationMode`] enum value.
+    ///
+    /// # Examples
+    ///
+    /// The following example demonstrates setting the calculation mode of a
+    /// workbook to manual, so that Excel displays the stored formula result
+    /// when the file is opened instead of recalculating it.
+    ///
+    /// Note, that Excel has added a strike-through to the cell with the
+    /// calculation to indicate that the calculated value is stale.
+    ///
+    /// ```
+    /// # // This code is available in examples/doc_workbook_set_calculation_mode.rs
+    /// #
+    /// # use rust_xlsxwriter::{CalculationMode, Workbook, XlsxError};
+    /// #
+    /// # fn main() -> Result<(), XlsxError> {
+    ///     let mut workbook = Workbook::new();
+    ///
+    ///     let worksheet = workbook.add_worksheet();
+    ///
+    ///     // Write a formula and its result.
+    ///     worksheet.write_formula(0, 0, "=SUM(A2:A3)")?;
+    ///     worksheet.set_formula_result(0, 0, "30");
+    ///     worksheet.write_number(1, 0, 10)?;
+    ///     worksheet.write_number(2, 0, 20)?;
+    ///
+    ///     // Only recalculate formulas when the user requests it.
+    ///     workbook.set_calculation_mode(CalculationMode::Manual);
+    ///
+    ///     workbook.save("workbook.xlsx")?;
+    /// #
+    /// #     Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Output file:
+    ///
+    /// <img
+    /// src="https://rustxlsxwriter.github.io/images/workbook_set_calculation_mode.png">
+    ///
+    pub fn set_calculation_mode(&mut self, mode: CalculationMode) -> &mut Workbook {
+        self.calculation_mode = mode;
+        self
+    }
+
     /// Set the order/index for the format.
     ///
     /// This is currently only used in testing to ensure the same format order
@@ -2406,6 +2541,25 @@ impl Workbook {
         );
     }
 
+    // Create the temporary file used by "constant memory" and "low memory"
+    // worksheets. This uses the directory set by `set_tempdir()`, if any, or
+    // else the default `std::env::temp_dir()` directory.
+    #[cfg(feature = "constant_memory")]
+    fn new_tempfile_writer(&self) -> Result<BufWriter<File>, XlsxError> {
+        let tempdir = self.tempdir.clone().unwrap_or_else(std::env::temp_dir);
+        let file = Self::create_tempfile(&tempdir)?;
+
+        Ok(BufWriter::new(file))
+    }
+
+    // Create a temporary file in a directory and map any IO error to a
+    // TempFileError that includes the directory name.
+    #[cfg(feature = "constant_memory")]
+    fn create_tempfile(dir: &Path) -> Result<File, XlsxError> {
+        tempfile_in(dir)
+            .map_err(|error| XlsxError::TempFileError(format!("{}: {error}", dir.display())))
+    }
+
     // Read theme XML from either a zip file (thmx/xlsx) or a text file.
     fn read_theme_from_path<P: AsRef<Path>>(path: P) -> Result<String, XlsxError> {
         let file = File::open(&path)?;
@@ -2442,7 +2596,7 @@ impl Workbook {
     // writing to the xlsx file.
     #[allow(clippy::similar_names)]
     #[allow(clippy::too_many_lines)]
-    fn save_internal<W: Write + Seek + Send>(&mut self, writer: W) -> Result<(), XlsxError> {
+    fn save_internal<W: Write + Send>(&mut self, writer: W) -> Result<(), XlsxError> {
         // Reset workbook and worksheet state data between saves.
         self.reset();
 
@@ -2589,7 +2743,10 @@ impl Workbook {
         self.prepare_format_properties();
 
         // Prepare worksheet tables.
-        self.prepare_tables()?;
+        self.prepare_tables();
+
+        // Check the table and defined names for duplicates.
+        self.prepare_names()?;
 
         // Update the shared string table in each worksheet.
         for worksheet in &mut self.worksheets {
@@ -2604,7 +2761,7 @@ impl Workbook {
         package_options = self.set_package_options(package_options)?;
 
         // Create the Packager object that will assemble the zip/xlsx file.
-        let packager = Packager::new(writer, self.use_large_file);
+        let packager = Packager::new(writer, self.use_large_file, self.zip_compression_level);
         packager.assemble_file(self, &package_options)?;
 
         Ok(())
@@ -2754,9 +2911,8 @@ impl Workbook {
     }
 
     // Prepare and check each table in the workbook.
-    fn prepare_tables(&mut self) -> Result<(), XlsxError> {
+    fn prepare_tables(&mut self) {
         let mut table_id = 1;
-        let mut seen_table_names = HashSet::new();
 
         // Set a unique table id and table name and also set the .rel file
         // linkages.
@@ -2765,15 +2921,42 @@ impl Workbook {
                 table_id = worksheet.prepare_worksheet_tables(table_id);
             }
         }
+    }
 
-        // Check for duplicate table names.
+    // Check the Table and Defined names in the workbook for duplicates. Defined
+    // names can be duplicated across scopes so "Sales", "Sheet1!Sales" and
+    // "Sheet2!Sales" are all valid within the same workbook. Table names,
+    // however, conflict with defined names in any scope.
+    fn prepare_names(&mut self) -> Result<(), XlsxError> {
+        let mut seen_scoped_names = HashSet::new();
+        let mut seen_names = HashSet::new();
+
+        // Check the user defined names for duplicates in their scope.
+        for defined_name in &self.user_defined_names {
+            let scoped_name = match defined_name.name_type {
+                DefinedNameType::Global => defined_name.name.to_lowercase(),
+                DefinedNameType::Local => {
+                    let sheet_name = utility::unquote_sheetname(&defined_name.quoted_sheet_name);
+                    format!("{}!{}", sheet_name, defined_name.name).to_lowercase()
+                }
+                _ => continue,
+            };
+
+            if !seen_scoped_names.insert(scoped_name) {
+                return Err(XlsxError::NameReused(defined_name.name.clone()));
+            }
+
+            // Also store the un-scoped name to check against table names below.
+            seen_names.insert(defined_name.name.to_lowercase());
+        }
+
+        // Check the table names for duplicates. Table names conflict with other
+        // table names and with defined names in any scope.
         for worksheet in &self.worksheets {
             for table in &worksheet.tables {
-                if seen_table_names.contains(&table.name.to_lowercase()) {
-                    return Err(XlsxError::TableNameReused(table.name.clone()));
+                if !seen_names.insert(table.name.to_lowercase()) {
+                    return Err(XlsxError::NameReused(table.name.clone()));
                 }
-
-                seen_table_names.insert(table.name.to_lowercase());
             }
         }
 
@@ -3458,8 +3641,48 @@ impl Workbook {
 
     // Write the <calcPr> element.
     fn write_calc_pr(&mut self) {
-        let attributes = [("calcId", "124519"), ("fullCalcOnLoad", "1")];
+        let mut attributes = vec![("calcId", "124519")];
+
+        match self.calculation_mode {
+            CalculationMode::Automatic => {
+                attributes.push(("fullCalcOnLoad", "1"));
+            }
+            CalculationMode::Manual => {
+                attributes.push(("calcMode", "manual"));
+                attributes.push(("calcOnSave", "0"));
+            }
+            CalculationMode::Partial => {
+                attributes.push(("calcMode", "autoNoTable"));
+                attributes.push(("fullCalcOnLoad", "1"));
+            }
+        }
 
         xml_empty_tag(&mut self.writer, "calcPr", &attributes);
     }
+}
+
+// -----------------------------------------------------------------------
+// Helper enums/structs/functions.
+// -----------------------------------------------------------------------
+
+/// The `CalculationMode` enum defines the formula calculation modes for a
+/// workbook.
+///
+/// It is used with [`Workbook::set_calculation_mode()`].
+///
+pub enum CalculationMode {
+    /// Excel recalculates all formulas in the workbook when it is opened, and
+    /// whenever a formula or a value that it depends on changes. This is the
+    /// default.
+    Automatic,
+
+    /// Excel only recalculates the formulas in the workbook when the user
+    /// requests it, generally by pressing F9. The formulas aren't recalculated
+    /// when the file is opened or saved.
+    Manual,
+
+    /// Excel recalculates the formulas in the workbook automatically, except
+    /// for formulas in Data Tables (What-If analysis tables, not worksheet
+    /// tables).
+    Partial,
 }

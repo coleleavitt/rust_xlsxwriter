@@ -8,7 +8,7 @@
 mod workbook_tests {
 
     use crate::{test_functions::xml_to_vec, XlsxError};
-    use crate::{xmlwriter, Table, Workbook};
+    use crate::{xmlwriter, CalculationMode, Table, Workbook};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -42,21 +42,57 @@ mod workbook_tests {
     }
 
     #[test]
-    fn define_name() {
+    fn test_define_name() {
         let mut workbook = Workbook::default();
 
         // Test invalid defined names.
         let names = vec![
-            ".foo",    // Invalid start character.
-            "foo bar", // Space in name
-            "Foo,",    // Other invalid characters.
-            "Foo/", "Foo[", "Foo]", "Foo'", "Foo\"bar", "Foo:", "Foo*",
+            ".foo",           // Invalid start character.
+            "foo bar",        // Space in name
+            "Foo,",           // Invalid character ','.
+            "Foo/",           // Invalid character '/'.
+            "Foo[",           // Invalid character '['.
+            "Foo]",           // Invalid character ']'.
+            "Foo'",           // Invalid character "'".
+            "Foo\"bar",       // Invalid character '"'.
+            "Foo:",           // Invalid character ':'.
+            "Foo*",           // Invalid character '*'.
+            "Sheet1!Foo!Bar", // Invalid character '!'.
+            "",               // Blank name.
+            "Sheet1!",        // Blank name.
+            "!Foo",           // Starts with !.
+            "'A!B'Sales",     // Malformed: missing "!" after quoted sheet name.
+            "'A!B",           // Malformed: unclosed sheet name quote.
+            "'!",             // Malformed: string too short after quote.
+            "!",              // Malformed: delimiter only.
         ];
 
         for name in names {
             let result = workbook.define_name(name, "");
-            assert!(matches!(result, Err(XlsxError::ParameterError(_))));
+            assert!(
+                matches!(result, Err(XlsxError::NameError(_, _))),
+                "for name '{name}'"
+            );
         }
+    }
+
+    #[test]
+    fn test_define_name_with_quoted_sheet_name() {
+        let mut workbook = Workbook::default();
+
+        // Test local defined names on sheet names that require quoting,
+        // including sheet names with the "!" delimiter or escaped quotes.
+        let _ = workbook.add_worksheet().set_name("Sheet 1").unwrap();
+        let _ = workbook.add_worksheet().set_name("A!B").unwrap();
+        let _ = workbook.add_worksheet().set_name("It's").unwrap();
+
+        workbook.define_name("'Sheet 1'!Sales", "=1").unwrap();
+        workbook.define_name("'A!B'!Sales", "=2").unwrap();
+        workbook.define_name("'It''s'!Sales", "=3").unwrap();
+
+        let result = workbook.save_to_buffer();
+
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -82,7 +118,7 @@ mod workbook_tests {
     }
 
     #[test]
-    fn duplicate_tables() {
+    fn test_duplicate_table_names() {
         let mut workbook = Workbook::default();
         let worksheet = workbook.add_worksheet();
 
@@ -93,9 +129,83 @@ mod workbook_tests {
         table = table.set_name("foo");
         worksheet.add_table(10, 10, 19, 19, &table).unwrap();
 
-        let result = workbook.prepare_tables();
+        let result = workbook.prepare_names();
 
-        assert!(matches!(result, Err(XlsxError::TableNameReused(_))));
+        assert!(matches!(result, Err(XlsxError::NameReused(_))));
+    }
+
+    #[test]
+    fn test_duplicate_defined_names() {
+        let mut workbook = Workbook::default();
+
+        // Duplicate global defined names. The check is case insensitive.
+        workbook.define_name("Foo", "=Sheet1!$A$1").unwrap();
+        workbook.define_name("foo", "=Sheet1!$B$1").unwrap();
+
+        let result = workbook.prepare_names();
+
+        assert!(matches!(result, Err(XlsxError::NameReused(_))));
+    }
+
+    #[test]
+    fn test_duplicate_local_defined_names() {
+        let mut workbook = Workbook::default();
+
+        // Duplicate local defined names in the same worksheet scope.
+        workbook.define_name("Sheet1!Foo", "=Sheet1!$A$1").unwrap();
+        workbook.define_name("Sheet1!foo", "=Sheet1!$B$1").unwrap();
+
+        let result = workbook.prepare_names();
+
+        assert!(matches!(result, Err(XlsxError::NameReused(_))));
+    }
+
+    #[test]
+    fn test_non_duplicate_defined_names() {
+        let mut workbook = Workbook::default();
+
+        // Global and local defined names are in different worksheet scopes and
+        // shouldn't conflict.
+        workbook.define_name("Foo", "=Sheet1!$A$1").unwrap();
+        workbook.define_name("Sheet1!Foo", "=Sheet1!$B$1").unwrap();
+        workbook.define_name("Sheet2!Foo", "=Sheet2!$A$1").unwrap();
+
+        let result = workbook.prepare_names();
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_duplicate_table_and_defined_name() {
+        let mut workbook = Workbook::default();
+
+        // Table names share the workbook namespace with global defined names.
+        workbook.define_name("Foo", "=Sheet1!$A$1").unwrap();
+
+        let worksheet = workbook.add_worksheet();
+        let table = Table::new().set_name("foo");
+        worksheet.add_table(0, 0, 9, 9, &table).unwrap();
+
+        let result = workbook.prepare_names();
+
+        assert!(matches!(result, Err(XlsxError::NameReused(_))));
+    }
+
+    #[test]
+    fn test_table_name_and_local_defined_name() {
+        let mut workbook = Workbook::default();
+
+        // Table names conflict with defined names in any scope, including sheet
+        // local defined names.
+        workbook.define_name("Sheet1!Foo", "=Sheet1!$A$1").unwrap();
+
+        let worksheet = workbook.add_worksheet();
+        let table = Table::new().set_name("Foo");
+        worksheet.add_table(0, 0, 9, 9, &table).unwrap();
+
+        let result = workbook.prepare_names();
+
+        assert!(matches!(result, Err(XlsxError::NameReused(_))));
     }
 
     #[test]
@@ -126,5 +236,145 @@ mod workbook_tests {
         let result = workbook.use_custom_theme(theme_file);
 
         assert!(matches!(result, Err(XlsxError::ThemeError(_))));
+    }
+
+    // Test a failure to create a temporary file. The temp dir is removed after
+    // it is set to simulate a directory that isn't writable.
+    #[test]
+    #[cfg(feature = "constant_memory")]
+    fn test_tempfile_error() -> Result<(), XlsxError> {
+        let tempdir = tempfile::tempdir()?;
+        let tempdir_path = tempdir.path().to_path_buf();
+
+        let mut workbook = Workbook::new();
+        workbook.set_tempdir(&tempdir_path)?;
+        tempdir.close()?;
+
+        let result = workbook.add_worksheet_with_constant_memory();
+        assert!(matches!(result, Err(XlsxError::TempFileError(_))));
+
+        let result = workbook.add_worksheet_with_low_memory();
+        assert!(matches!(result, Err(XlsxError::TempFileError(_))));
+
+        let result = workbook.new_worksheet_with_constant_memory();
+        assert!(matches!(result, Err(XlsxError::TempFileError(_))));
+
+        let result = workbook.new_worksheet_with_low_memory();
+        assert!(matches!(result, Err(XlsxError::TempFileError(_))));
+
+        // Failed worksheets shouldn't be added to the workbook.
+        assert!(workbook.worksheets.is_empty());
+        let worksheet = workbook.add_worksheet();
+        assert_eq!("Sheet1", worksheet.name());
+
+        // Standard worksheets don't need a temp file.
+        workbook.save_to_buffer()?;
+
+        // A non-existent directory is also an error in set_tempdir().
+        let result = workbook.set_tempdir(&tempdir_path);
+        assert!(matches!(result, Err(XlsxError::TempFileError(_))));
+
+        Ok(())
+    }
+
+    // Test the zip compression level for the xlsx container.
+    #[test]
+    fn test_zip_compression_level() -> Result<(), XlsxError> {
+        use crate::Image;
+
+        let create_workbook = |level: Option<u8>| -> Result<Workbook, XlsxError> {
+            let mut workbook = Workbook::new();
+            if let Some(level) = level {
+                workbook.set_zip_compression_level(level);
+            }
+
+            let worksheet = workbook.add_worksheet();
+            for row in 0..1000 {
+                worksheet.write(row, 0, "Hello")?;
+                worksheet.write(row, 1, row)?;
+            }
+
+            // Binary files are stored uncompressed and shouldn't be affected
+            // by the compression level.
+            let image = Image::new("tests/input/images/red.png")?;
+            worksheet.insert_image(0, 3, &image)?;
+
+            Ok(workbook)
+        };
+
+        // Out of range values are ignored.
+        let mut workbook = create_workbook(Some(0))?;
+        assert_eq!(None, workbook.zip_compression_level);
+        let default_size = workbook.save_to_buffer()?.len();
+
+        let workbook = create_workbook(Some(10))?;
+        assert_eq!(None, workbook.zip_compression_level);
+
+        // The default level is 6.
+        let mut workbook = create_workbook(Some(6))?;
+        assert_eq!(default_size, workbook.save_to_buffer()?.len());
+
+        let mut workbook = create_workbook(Some(1))?;
+        assert_eq!(Some(1), workbook.zip_compression_level);
+        let fast_size = workbook.save_to_buffer()?.len();
+
+        let mut workbook = create_workbook(Some(9))?;
+        assert_eq!(Some(9), workbook.zip_compression_level);
+        let best_size = workbook.save_to_buffer()?.len();
+
+        assert!(best_size < fast_size);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_calc_pr() {
+        let mut workbook = Workbook::default();
+
+        workbook.write_calc_pr();
+
+        let got = xmlwriter::cursor_to_str(&workbook.writer);
+        let expected = r#"<calcPr calcId="124519" fullCalcOnLoad="1"/>"#;
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn test_write_calc_pr_auto() {
+        let mut workbook = Workbook::default();
+        workbook.set_calculation_mode(CalculationMode::Automatic);
+
+        workbook.write_calc_pr();
+
+        let got = xmlwriter::cursor_to_str(&workbook.writer);
+        let expected = r#"<calcPr calcId="124519" fullCalcOnLoad="1"/>"#;
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn test_write_calc_pr_manual() {
+        let mut workbook = Workbook::default();
+        workbook.set_calculation_mode(CalculationMode::Manual);
+
+        workbook.write_calc_pr();
+
+        let got = xmlwriter::cursor_to_str(&workbook.writer);
+        let expected = r#"<calcPr calcId="124519" calcMode="manual" calcOnSave="0"/>"#;
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn test_write_calc_pr_auto_except_tables() {
+        let mut workbook = Workbook::default();
+        workbook.set_calculation_mode(CalculationMode::Partial);
+
+        workbook.write_calc_pr();
+
+        let got = xmlwriter::cursor_to_str(&workbook.writer);
+        let expected = r#"<calcPr calcId="124519" calcMode="autoNoTable" fullCalcOnLoad="1"/>"#;
+
+        assert_eq!(expected, got);
     }
 }

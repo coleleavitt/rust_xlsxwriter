@@ -128,6 +128,27 @@ pub enum XlsxError {
     ///
     DateTimeParseError(String),
 
+    /// A general error raised when a Table or defined name doesn't meet Excel's
+    /// criteria as defined by the following rules:
+    ///
+    /// - The name cannot be blank.
+    /// - The name should not contain non-word characters apart from period `.`,
+    ///   underscore `_` and backslash `\`. Word characters include Unicode
+    ///   letters and digits.
+    /// - The first character must be a letter, an underscore character `_`, or
+    ///   a backslash `\`.
+    /// - The name cannot contain spaces.
+    /// - The name cannot exceed 255 characters.
+    /// - The name cannot be the same as a cell reference like `A1`, `Z100` or
+    ///   `R1C1`, or any lowercase variant.
+    /// - The name cannot match Excel's internally reserved names or `True` or `False`.
+    ///
+    NameError(String, String),
+
+    /// A Defined name or Table name is already in use in the workbook, either
+    /// with another table or another defined name.
+    NameReused(String),
+
     /// The table range overlaps a previous table range. This is strictly
     /// prohibited by Excel.
     TableRangeOverlaps(String, String),
@@ -135,9 +156,6 @@ pub enum XlsxError {
     /// A general error that is raised when a table parameter is incorrect, or a
     /// table is configured incorrectly.
     TableError(String),
-
-    /// Table name is already in use in the workbook.
-    TableNameReused(String),
 
     /// A Worksheet and Table autofilter range overlap. This is strictly
     /// prohibited by Excel.
@@ -175,6 +193,12 @@ pub enum XlsxError {
     /// A customizable error that can be used by third parties to raise errors
     /// or as a conversion target for other error types.
     CustomError(String),
+
+    /// An error that is raised when a temporary file can't be created for a
+    /// "constant memory" or "low memory" worksheet, or when using a custom
+    /// temporary directory. This is usually caused by the temporary directory
+    /// not existing or not being writable.
+    TempFileError(String),
 
     /// Wrapper for a variety of [`std::io::Error`] errors such as file
     /// permissions when writing the xlsx file to disk. This can be caused by a
@@ -315,15 +339,16 @@ impl fmt::Display for XlsxError {
                 write!(f, "Date parse error: '{error}'")
             }
 
-            XlsxError::TableError(error) => {
-                write!(f, "Table error: '{error}'.")
+            XlsxError::NameError(name, error) => {
+                write!(f, "Name error for '{name}': '{error}'.")
             }
 
-            XlsxError::TableNameReused(name) => {
-                write!(
-                    f,
-                    "Table name '{name}' has already been used in this workbook.",
-                )
+            XlsxError::NameReused(name) => {
+                write!(f, "Name '{name}' has already been used in this workbook.")
+            }
+
+            XlsxError::TableError(error) => {
+                write!(f, "Table error: '{error}'.")
             }
 
             XlsxError::ConditionalFormatError(error) => {
@@ -355,6 +380,10 @@ impl fmt::Display for XlsxError {
 
             XlsxError::CustomError(error) => {
                 write!(f, "{error}")
+            }
+
+            XlsxError::TempFileError(error) => {
+                write!(f, "Temporary file error: '{error}'.")
             }
 
             XlsxError::IoError(error) => {

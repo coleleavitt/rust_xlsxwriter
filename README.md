@@ -139,21 +139,10 @@ following design considerations:
 As mentioned above the `rust_xlsxwriter` library has sister libraries
 written natively in C, Python, and Perl.
 
-A relative performance comparison between the C, Rust, and Python versions
-is shown below. The Perl performance is similar to the Python library, so it
-has been omitted.
+A relative performance comparison between the C, Rust, and Python versions is:
 
-| Library                       | Relative to C | Relative to Rust |
-|-------------------------------|---------------|------------------|
-| C/libxlsxwriter               | 1.00          |                  |
-| `rust_xlsxwriter`             | 1.14          | 1.00             |
-| Python/XlsxWriter             | 4.36          | 3.81             |
-
-<br>
-
-The C version is the fastest: it is 1.14 times faster than the Rust version
-and 4.36 times faster than the Python version. The Rust version is 3.81
-times faster than the Python version.
+- `rust_xlsxwriter` is 1.6x faster than C/libxlsxwriter.
+- `rust_xlsxwriter` is 6.5x faster than Python/XlsxWriter.
 
 See the [Performance] section for more details.
 
@@ -190,8 +179,6 @@ These are all off by default.
   [`IntoExcelDateTime`].
 - `jiff`: Adds support for Jiff date/time types to the API. See
   [`IntoExcelDateTime`].
-- `zlib`: Improves performance of the `zlib` crate but adds a dependency on
-  zlib and a C compiler. This can be up to 1.5 times faster for large files.
 - `polars`: Adds support for mapping between `PolarsError` and
   `rust_xlsxwriter::XlsxError`. See also
   [`polars_excel_writer`](https://crates.io/crates/polars_excel_writer).
@@ -200,8 +187,8 @@ These are all off by default.
   [wasm-xlsxwriter](https://github.com/estie-inc/wasm-xlsxwriter).
 - `rust_decimal`: Adds support for writing the
   [`rust_decimal`](https://crates.io/crates/rust_decimal) `Decimal`.
-- `ryu`: Adds a dependency on `ryu`. This speeds up writing numeric
-  worksheet cells for large data files. See the [Performance] documentation.
+- `zmij`: Adds a dependency on `zmij`. This speeds up writing numeric
+  worksheet cells by around 10%. See the [Performance] documentation.
 
 A `rust_xlsxwriter` feature can be enabled in your `Cargo.toml` file as
 follows:
@@ -216,6 +203,7 @@ cargo add rust_xlsxwriter -F constant_memory
 
 Recent changes:
 
+- Added support for writing directly to STDOUT.
 - Added support for autofitting formatted numbers and dates.
 - Added support for workbook themes.
 

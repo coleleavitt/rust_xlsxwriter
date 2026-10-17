@@ -8,22 +8,23 @@ keywords = ["excel", "xlsx"]
 exclude = ["tests/**/*"]
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-version = "0.94.0"
+version = "0.99.1"
 edition = "2021"
-rust-version = "1.83.0" # For zip.rs compatibility.
+rust-version = "1.88.0" # For zip.rs compatibility.
 
 [dependencies]
 # Default/non-optional dependencies.
-zip = {version = "7.2", default-features = false, features = ["deflate"]}
+zip = {version = "9.0", default-features = false, features = ["deflate"]}
 
 # Optional dependencies.
 ryu = {optional = true, version = "1.0"}
+zmij = {optional = true, version = "1.0"}
 jiff = {optional = true, version = "0.2", default-features = false, features = []}
 serde = {optional = true, version = "1.0", features = ["derive"]}
 ssfmt = {optional = true, version = "0.1"}
 chrono = {optional = true, version = "0.4", default-features = false, features = ["clock", "wasmbind", "serde"]}
 js-sys = {optional = true, version = "0.3"}
-polars = {optional = true, version = "0.53", default-features = false, features = []}
+polars = {optional = true, version = "0.55", default-features = false, features = []}
 tempfile =  {optional = true, version = "3.24"}
 wasm-bindgen = {optional = true, version = "0.2"}
 rust_decimal = {optional = true, version = "1.40"}
@@ -32,14 +33,19 @@ rust_xlsxwriter_derive = {optional = true, version = "0.2"}
 [dev-dependencies]
 regex = "1.12"
 pretty_assertions = "1.4"
+criterion = "0.5"
+
+[[bench]]
+name = "float_formatting"
+harness = false
+
+[[bench]]
+name = "write_performance"
+harness = false
 
 [features]
 # `default`: Includes all the standard functionality.
 default = []
-
-# `zlib`: Adds a dependency on zlib and a C compiler. This includes the same
-# features as `default` but is 1.5x faster for large files.
-zlib = ["zip/deflate-flate2-zlib"]
 
 # `chrono`: Adds support for Chrono dates/times in addition to the native
 # `ExcelDateTime` types.
@@ -72,11 +78,20 @@ wasm = ["js-sys", "wasm-bindgen"]
 # `Worksheet::write()`, provided it can be represented by f64.
 rust_decimal = ["dep:rust_decimal"]
 
+# `zmij`: Adds a dependency on `zmij`. This speeds up writing numeric worksheet
+# cells by about 10%.
+zmij = ["dep:zmij"]
+
 # `ryu`: Adds a dependency on `ryu`. This speeds up writing numeric worksheet
-# cells for large data files. It gives a performance boost above 300,000 numeric
-# cells and can be up to 30% faster than the default number formatting for
-# 5,000,000 numeric cells.
+# cells by about 7%. This is deprecated in favor of `zmij` which is faster and
+# by the same author.
 ryu = ["dep:ryu"]
+
+
+# `zlib`: Adds a dependency on zlib and a C compiler. This dependency is
+# deprecated since it no longer gives better performance than the native Rust
+# implementation.
+zlib = ["zip/deflate-flate2-zlib"]
 
 # `test-resave`: Developer-only testing feature.
 test-resave = []

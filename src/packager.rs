@@ -41,16 +41,16 @@
 // the package and writes them into the xlsx file.
 
 use std::collections::HashSet;
-use std::io::{Seek, Write};
+use std::io::Write;
 
 #[cfg(feature = "constant_memory")]
-use std::io::{BufRead, BufReader};
+use std::io::{BufReader, Seek};
 
 use std::sync::{Arc, Mutex};
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
 
-use zip::write::SimpleFileOptions;
+use zip::write::{SimpleFileOptions, StreamWriter};
 use zip::{DateTime, ZipWriter};
 
 use crate::app::App;
@@ -75,29 +75,38 @@ use crate::worksheet::Worksheet;
 use crate::{xmlwriter, Comment, DocProperties, Visible, NUM_IMAGE_FORMATS};
 
 // Packager struct to assemble the xlsx file.
-pub struct Packager<W: Write + Seek> {
-    zip: ZipWriter<W>,
+pub struct Packager<W: Write> {
+    zip: ZipWriter<StreamWriter<W>>,
     zip_options: SimpleFileOptions,
     zip_options_for_binary_files: SimpleFileOptions,
 }
 
-impl<W: Write + Seek + Send> Packager<W> {
+impl<W: Write + Send> Packager<W> {
     // -----------------------------------------------------------------------
     // Crate public methods.
     // -----------------------------------------------------------------------
 
     // Create a new Packager struct.
-    pub(crate) fn new(writer: W, use_large_file: bool) -> Packager<W> {
-        let zip = zip::ZipWriter::new(writer);
+    pub(crate) fn new(
+        writer: W,
+        use_large_file: bool,
+        compression_level: Option<i64>,
+    ) -> Packager<W> {
+        let zip = zip::ZipWriter::new_stream(writer);
 
         let zip_options = SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
+            .compression_level(compression_level)
             .unix_permissions(0o600)
             .last_modified_time(DateTime::default())
             .large_file(use_large_file);
 
-        let zip_options_for_binary_files =
-            zip_options.compression_method(zip::CompressionMethod::Stored);
+        // Binary files, such as images, are stored uncompressed. These options
+        // are copied from the deflate options above, so clear the compression
+        // level since the zip crate would reject a level with the Stored method.
+        let zip_options_for_binary_files = zip_options
+            .compression_method(zip::CompressionMethod::Stored)
+            .compression_level(None);
 
         Packager {
             zip,
@@ -482,17 +491,10 @@ impl<W: Write + Seek + Send> Packager<W> {
                 // We also need to flush the last remaining row.
                 worksheet.flush_last_row();
 
-                worksheet.file_writer.rewind().unwrap();
-                let mut reader = BufReader::new(worksheet.file_writer.get_ref());
-                loop {
-                    let buffer = reader.fill_buf().unwrap();
-                    let length = buffer.len();
-                    if length == 0 {
-                        break;
-                    }
-                    self.zip.write_all(buffer).unwrap();
-                    reader.consume(length);
-                }
+                let file_writer = worksheet.file_writer();
+                file_writer.rewind().unwrap();
+                let mut reader = BufReader::new(file_writer.get_ref());
+                std::io::copy(&mut reader, &mut self.zip)?;
             }
 
             // Section 3. In memory metadata at end of the file.
@@ -631,11 +633,9 @@ impl<W: Write + Seek + Send> Packager<W> {
     ) -> Result<(), XlsxError> {
         let mut rels = Relationship::new();
 
-        let mut index = 1;
-        for image in &workbook.embedded_images {
+        for (index, image) in (1..).zip(workbook.embedded_images.iter()) {
             let target = format!("../media/image{index}.{}", image.image_type.extension());
             rels.add_document_relationship("image", &target, "");
-            index += 1;
         }
 
         let filename = "xl/richData/_rels/richValueRel.xml.rels";
@@ -922,7 +922,12 @@ impl<W: Write + Seek + Send> Packager<W> {
 
                 let mut comment = Comment::new();
                 comment.notes = worksheet.notes.clone();
-                comment.note_authors = worksheet.note_authors.keys().cloned().collect();
+                let mut authors: Vec<(&String, &usize)> = worksheet.note_authors.iter().collect();
+                authors.sort_by_key(|x| x.1);
+                comment.note_authors = authors
+                    .into_iter()
+                    .map(|(author, _)| author.clone())
+                    .collect();
 
                 comment.assemble_xml_file();
 
